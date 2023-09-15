@@ -33,17 +33,19 @@ class ISLES2022(BaseDataset):
         self,
         isles_data_dir: str,
         image_size: Sequence[int],
-        totalnumber: int = 250,
         test_size: float = 0.3,
     ) -> None:
+        derivates_dir = os.path.join(isles_data_dir, "derivatives")
+        #rawdata_dir = os.path.join(isles_data_dir, "rawdata")
+        sub_strokecase_names = os.listdir(derivates_dir)
         self.data = []
-        for i in range(1, totalnumber + 1):
+        for name in sub_strokecase_names:
             dwi_path = os.path.join(
                 isles_data_dir,
                 "rawdata",
-                "sub-strokecase{}".format("%04d" % i),
+                name,
                 "ses-0001",
-                "sub-strokecase{}_ses-0001_dwi.nii.gz".format("%04d" % i),
+                f"{name}_ses-0001_dwi.nii.gz"
             )
             adc_path = dwi_path.replace("dwi", "adc")
             flair_path = dwi_path.replace("dwi", "flair")

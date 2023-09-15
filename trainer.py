@@ -13,9 +13,10 @@ from monai.transforms import (
 )
 from monai.data.utils import decollate_batch
 from monai.metrics import DiceMetric
-from monai.losses import DiceLoss, DiceCELoss
+from monai.losses import DiceLoss, DiceCELoss, DiceFocalLoss
 from torch.utils.tensorboard import SummaryWriter
-from utils import set_seed
+from utils import set_seed,load_weight,get_args
+from torch.optim.lr_scheduler import StepLR,ExponentialLR
 
 join = os.path.join
 # 加速
@@ -33,6 +34,8 @@ image_sizes = (96, 96, 96)
 batch_size = 1
 epochs = 200
 
+args = get_args()
+
 
 dataset = ISLES2022(
     "D:/datasets/ISLES/dataset-ISLES22^public^unzipped^version",
@@ -47,19 +50,24 @@ val_dataloader = dataset.get_val_loader(batch_size=batch_size)
 from testmodel import NN
 
 model = NN(2, 2)
+
+if args.resume_path != None:
+    model = load_weight(model,args.resume_path)
+    print("load weight from {}".format(args.resume_path))
+
 print(model)
 # optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 # scheduler
-# scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.1)
+scheduler = ExponentialLR(optimizer, gamma=0.9)
 
 # device
 cpu = torch.device("cpu")
 device = accelerator.device
 model.to(device)
 # train
-model, optimizer, train_dataloader, val_dataloader = accelerator.prepare(
-    model, optimizer, train_dataloader, val_dataloader
+model, optimizer, scheduler, train_dataloader, val_dataloader = accelerator.prepare(
+    model, optimizer, scheduler, train_dataloader, val_dataloader
 )
 # loss function
 loss_func = DiceCELoss(to_onehot_y=True, softmax=True)
@@ -96,12 +104,14 @@ for epoch in range(epochs):
                 loss=train_epoch_loss / (step + 1), dice=metric.aggregate().item()
             )
 
+        scheduler.step()
         train_epoch_loss /= step + 1
         train_dice = metric.aggregate().item()
 
         if accelerator.is_local_main_process:
             writer.add_scalar("train/loss", train_epoch_loss, epoch)
             writer.add_scalar("train/dice", train_dice, epoch)
+            writer.add_scalar("train/lr", scheduler.get_last_lr()[0], epoch)
 
     # val
     val_epoch_loss = 0
@@ -142,9 +152,9 @@ for epoch in range(epochs):
     if accelerator.is_local_main_process:
         unwrap_model = accelerator.unwrap_model(model)
         # save epoch model
-        #torch.save(
+        # torch.save(
         #    unwrap_model.state_dict(), join(model_save_path, f"epoch_{epoch}.pth")
-        #)
+        # )
         # save latest model
         torch.save(unwrap_model.state_dict(), join(model_save_path, "latest_model.pth"))
         # save best model
