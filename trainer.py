@@ -15,30 +15,29 @@ from monai.data.utils import decollate_batch
 from monai.metrics import DiceMetric
 from monai.losses import DiceLoss, DiceCELoss, DiceFocalLoss
 from torch.utils.tensorboard import SummaryWriter
-from utils import set_seed,load_weight,get_args
-from torch.optim.lr_scheduler import StepLR,ExponentialLR
+from utils import set_seed, load_weight, get_config
+from torch.optim.lr_scheduler import StepLR, ExponentialLR
 
 join = os.path.join
 # 加速
 accelerator = Accelerator()
 
 work_dir = "./work_dir"
-set_seed()
 os.makedirs(work_dir, exist_ok=True)
 if accelerator.is_local_main_process:
     model_save_path = join(work_dir, f"exp{len(os.listdir(work_dir)) + 1}")
     writer = SummaryWriter(model_save_path)
     os.makedirs(model_save_path, exist_ok=True)
 
-image_sizes = (96, 96, 96)
-batch_size = 1
-epochs = 200
 
-args = get_args()
-
+config = get_config()
+epochs = config.epochs
+batch_size = config.batch_size
+image_sizes = config.image_size
+set_seed(config.seed)
 
 dataset = ISLES2022(
-    "D:/datasets/ISLES/dataset-ISLES22^public^unzipped^version",
+    config.data_path,
     image_size=image_sizes,
 )
 train_dataloader = dataset.get_train_loader(batch_size=batch_size)
@@ -51,9 +50,9 @@ from testmodel import NN
 
 model = NN(2, 2)
 
-if args.resume_path != None:
-    model = load_weight(model,args.resume_path)
-    print("load weight from {}".format(args.resume_path))
+if config.resume_path != None:
+    model = load_weight(model, config.resume_path)
+    print("load weight from {}".format(config.resume_path))
 
 print(model)
 # optimizer
