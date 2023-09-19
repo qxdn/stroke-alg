@@ -33,13 +33,13 @@ dataset = ISLES2022(config.data_path, image_size=image_sizes)
 val_dataloader = dataset.get_val_loader(batch_size=batch_size)
 
 # model
-#from testmodel import NN
-#model = NN(2,2)
-model = UNETR(2, 2, image_sizes)
+from testmodel import NN
+model = NN(2,2)
+#model = UNETR(2, 2, image_sizes)
 
 assert config.resume_path != None, "resume path can't be none"
 
-model = load_weight(model, config.resume_path)
+#model = load_weight(model, config.resume_path)
 print(f"load weight from {config.resume_path}")
 filename = os.path.basename(config.resume_path)
 shutil.copyfile(config.resume_path,join(model_save_path,filename))
@@ -85,6 +85,11 @@ with tqdm(val_dataloader,unit="batch") as tepoch:
             sample_b = np.random.randint(0,b)
 
             image,output,label = image.to(cpu),output[sample_b].to(cpu),label[sample_b].to(cpu)
+
+            for i in range(w):
+                if label[1,i,:].sum() > 100:
+                    sample_w = i
+                    break
             sample_image = image[sample_b,0,sample_w,:]
             sample_output = output[1,sample_w,:]
             sample_label = label[1,sample_w,:]
