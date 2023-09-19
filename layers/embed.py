@@ -99,13 +99,5 @@ class PatchEmbedding(nn.Module):
         x = self.patch_embeddings(x)
         if self.pos_embed == "conv":
             x = x.flatten(2).transpose(-1, -2)
-        embeddings = x + self.position_embeddings
-        embeddings = self.dropout(embeddings)
-        return embeddings
-
-    def forward(self, x):
-        x = self.patch_embeddings(x)
-        if self.pos_embed == "conv":
-            x = x.flatten(2).transpose(-1, -2)
         embeddings = self.dropout(x)
         return embeddings
