@@ -45,10 +45,9 @@ val_dataloader = dataset.get_val_loader(batch_size=batch_size)
 
 
 # model
-# model = UNETR(2, 2, image_sizes)
-from testmodel import NN
-
-model = NN(2, 2)
+model = UNETR(2, 2, image_sizes)
+#from testmodel import NN
+#model = NN(2, 2)
 
 if config.resume_path != None:
     model = load_weight(model, config.resume_path)
@@ -69,7 +68,7 @@ model, optimizer, scheduler, train_dataloader, val_dataloader = accelerator.prep
     model, optimizer, scheduler, train_dataloader, val_dataloader
 )
 # loss function
-loss_func = DiceCELoss(to_onehot_y=True, softmax=True)
+loss_func = DiceFocalLoss(to_onehot_y=True, softmax=True)
 # metric
 metric = DiceMetric()
 post_pred = Compose([AsDiscrete(argmax=True, to_onehot=2)])
