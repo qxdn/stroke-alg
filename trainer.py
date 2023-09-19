@@ -17,6 +17,7 @@ from monai.losses import DiceLoss, DiceCELoss, DiceFocalLoss
 from torch.utils.tensorboard import SummaryWriter
 from utils import set_seed, load_weight, get_config
 from torch.optim.lr_scheduler import StepLR, ExponentialLR
+from nets import UNETRET
 
 join = os.path.join
 # 加速
@@ -45,7 +46,8 @@ val_dataloader = dataset.get_val_loader(batch_size=batch_size)
 
 
 # model
-model = UNETR(2, 2, image_sizes)
+#model = UNETR(2, 2, image_sizes)
+model = UNETRET(2, 2, image_sizes)
 #from testmodel import NN
 #model = NN(2, 2)
 
