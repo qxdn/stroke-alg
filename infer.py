@@ -37,8 +37,6 @@ dataset = ISLES2022(config.data_path, image_size=image_sizes)
 val_dataloader = dataset.get_val_loader(batch_size=batch_size)
 
 # model
-#from testmodel import NN
-#model = NN(2,2)
 model = UNETR(2, 2, image_sizes)
 
 assert config.resume_path != None, "resume path can't be none"
