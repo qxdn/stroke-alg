@@ -17,7 +17,7 @@ class UNETRET(nn.Module):
         img_size: Union[Sequence[int], int],
         feature_size: int = 16,
         ffn_size: int = 4096,
-        hidden_size: int = 2048,
+        hidden_size: int = 1024,
         num_heads: int = 16,
         pos_embed: str = "conv",
         norm_name: Union[Tuple, str] = "instance",
