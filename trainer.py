@@ -56,6 +56,8 @@ if config.resume_path != None:
     print("load weight from {}".format(config.resume_path))
 
 print(model)
+#from torchinfo import summary
+#summary(model, (1,2, 96, 96, 96),device='cpu')
 # optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 # scheduler

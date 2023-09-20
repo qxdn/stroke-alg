@@ -32,7 +32,7 @@ class UNETRET(nn.Module):
         if hidden_size % num_heads != 0:
             raise ValueError("hidden_size should be divisible by num_heads.")
     
-        self.num_layers = 24
+        self.num_layers = 12
         img_size = ensure_tuple_rep(img_size, spatial_dims)
         self.patch_size = ensure_tuple_rep(16, spatial_dims)
         self.feat_size = tuple(img_d // p_d for img_d, p_d in zip(img_size, self.patch_size))
@@ -144,11 +144,11 @@ class UNETRET(nn.Module):
     def forward(self, x_in):
         x, hidden_states_out = self.retnet(x_in)
         enc1 = self.encoder1(x_in)
-        x2 = hidden_states_out[6]
+        x2 = hidden_states_out[3]
         enc2 = self.encoder2(self.proj_feat(x2))
-        x3 = hidden_states_out[12]
+        x3 = hidden_states_out[6]
         enc3 = self.encoder3(self.proj_feat(x3))
-        x4 = hidden_states_out[18]
+        x4 = hidden_states_out[9]
         enc4 = self.encoder4(self.proj_feat(x4))
         dec4 = self.proj_feat(x)
         dec3 = self.decoder5(dec4, enc4)
