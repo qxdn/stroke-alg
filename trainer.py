@@ -46,22 +46,22 @@ val_dataloader = dataset.get_val_loader(batch_size=batch_size)
 
 
 # model
-#model = UNETR(2, 2, image_sizes)
+# model = UNETR(2, 2, image_sizes)
 model = UNETRET(2, 2, image_sizes)
-#from testmodel import NN
-#model = NN(2, 2)
+# from testmodel import NN
+# model = NN(2, 2)
 
 if config.resume_path != None:
     model = load_weight(model, config.resume_path)
     print("load weight from {}".format(config.resume_path))
 
 print(model)
-#from torchinfo import summary
-#summary(model, (1,2, 96, 96, 96),device='cpu')
+# from torchinfo import summary
+# summary(model, (1,2, 96, 96, 96),device='cpu')
 # optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 # scheduler
-scheduler = ExponentialLR(optimizer, gamma=0.9)
+scheduler = StepLR(optimizer, step_size=40, gamma=0.1)
 
 # device
 cpu = torch.device("cpu")
