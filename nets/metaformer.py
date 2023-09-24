@@ -11,6 +11,7 @@ from monai.networks.layers.factories import Conv
 from monai.networks.layers.utils import get_norm_layer, get_act_layer
 from monai.networks.blocks.dynunet_block import get_conv_layer
 
+
 class UpSample(nn.Module):
     def __init__(
         self,
@@ -35,22 +36,22 @@ class UpSample(nn.Module):
             is_transposed=True,
         )
 
-        
         self.conv_block = UnetrBasicBlock(
-                spatial_dims,
-                out_channels,
-                out_channels,
-                kernel_size=kernel_size,
-                stride=1,
-                norm_name=norm_name,
-                res_block=res_block
-            )
-       
-    def forward(self,inp, skip):
+            spatial_dims,
+            out_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            stride=1,
+            norm_name=norm_name,
+            res_block=res_block,
+        )
+
+    def forward(self, inp, skip):
         out = torch.cat((inp, skip), dim=1)
         out = self.transp_conv(out)
         out = self.conv_block(out)
         return out
+
 
 class CAFormer(nn.Module):
     def __init__(
@@ -123,71 +124,113 @@ class CAFormerUnet(nn.Module):
             spatial_dims=spatial_dims,
         )
 
-        skip_encoders = [
-            UnetrBasicBlock(
-                spatial_dims=spatial_dims,
-                in_channels=dim,
-                out_channels=dim,
-                kernel_size=3,
-                stride=1,
-                norm_name=norm_name,
-                res_block=res_block,
-            )
-            for dim in dims
-        ]
-        skip_encoders.reverse()
-
-        self.skip_encoders = nn.ModuleList(skip_encoders)
-
-        self.decoders = nn.ModuleList(
-            [
-                UpSample(
-                    spatial_dims=spatial_dims,
-                    in_channels=dims[-i],
-                    out_channels=dims[-i - 1],
-                    kernel_size=3,
-                    upsample_kernel_size=2,
-                    norm_name=norm_name,
-                    res_block=res_block,
-                )
-                for i in range(1, len(dims))
-            ]
+        self.skip_encoder1 = UnetrBasicBlock(
+            spatial_dims=spatial_dims,
+            in_channels=dims[3],
+            out_channels=dims[3],
+            kernel_size=3,
+            stride=1,
+            norm_name=norm_name,
+            res_block=res_block,
         )
 
-        self.last_upsample = UnetrPrUpBlock(
+        self.skip_encoder2 = UnetrBasicBlock(
+            spatial_dims=spatial_dims,
+            in_channels=dims[2],
+            out_channels=dims[2],
+            kernel_size=3,
+            stride=1,
+            norm_name=norm_name,
+            res_block=res_block,
+        )
+
+        self.skip_encoder3 = UnetrBasicBlock(
+            spatial_dims=spatial_dims,
+            in_channels=dims[1],
+            out_channels=dims[1],
+            kernel_size=3,
+            stride=1,
+            norm_name=norm_name,
+            res_block=res_block,
+        )
+
+        self.skip_encoder4 = UnetrBasicBlock(
             spatial_dims=spatial_dims,
             in_channels=dims[0],
             out_channels=dims[0],
-            num_layer=1,
             kernel_size=3,
             stride=1,
+            norm_name=norm_name,
+            res_block=res_block,
+        )
+
+        self.decoder1 = UpSample(
+            spatial_dims=spatial_dims,
+            in_channels=dims[3],
+            out_channels=dims[2],
+            kernel_size=3,
             upsample_kernel_size=2,
             norm_name=norm_name,
             res_block=res_block,
         )
 
+        self.decoder2 = UpSample(
+            spatial_dims=spatial_dims,
+            in_channels=dims[2],
+            out_channels=dims[1],
+            kernel_size=3,
+            upsample_kernel_size=2,
+            norm_name=norm_name,
+            res_block=res_block,
+        )
+
+        self.decoder3 = UpSample(
+            spatial_dims=spatial_dims,
+            in_channels=dims[1],
+            out_channels=dims[0],
+            kernel_size=3,
+            upsample_kernel_size=2,
+            norm_name=norm_name,
+            res_block=res_block,
+        )
+
+        self.decoder4 = UpSample(
+            spatial_dims=spatial_dims,
+            in_channels=dims[0],
+            out_channels=dims[0]//4,
+            kernel_size=3,
+            upsample_kernel_size=4,
+            norm_name=norm_name,
+            res_block=res_block,
+        )
+
+       
+
         self.final_conv = get_conv_layer(
             spatial_dims,
-            dims[0],
+            dims[0]//4,
             in_channels,
             kernel_size=1,
             stride=1,
             norm=norm_name,
             act=act,
-
         )
 
     def forward(self, x):
         x, hidden_states = self.caformer(x)
-        hidden_states.reverse()
 
-        for decoder, hidden_state, skip_encoder in zip(
-            self.decoders, hidden_states, self.skip_encoders
-        ):
-            skip = skip_encoder(hidden_state)
-            x = decoder(x , skip)
-        
-        x = self.last_upsample(x)
+        y = self.skip_encoder1(hidden_states[3]) # /32
+        x = self.decoder1(x, y) # /16
+
+        y = self.skip_encoder2(hidden_states[2]) # /16
+        x = self.decoder2(x, y) # /8
+
+        y = self.skip_encoder3(hidden_states[1]) # /8
+        x = self.decoder3(x, y) # /4
+
+        y = self.skip_encoder4(hidden_states[0]) # /4
+        x = self.decoder4(x, y) # /1
+
         x = self.final_conv(x)
 
         return x
