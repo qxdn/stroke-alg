@@ -1,4 +1,4 @@
-from typing import Sequence, Type, Union
+from typing import Sequence, Type, Union, Tuple
 
 import numpy as np
 import torch
@@ -6,7 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import LayerNorm
 
-from monai.networks.layers import Conv, trunc_normal_
+from monai.networks.layers import Conv, Norm, trunc_normal_
+from monai.networks.layers.utils import get_norm_layer
 from monai.utils import ensure_tuple_rep, optional_import
 from monai.utils.module import look_up_option
 
@@ -101,3 +102,30 @@ class PatchEmbedding(nn.Module):
             x = x.flatten(2).transpose(-1, -2)
         embeddings = self.dropout(x)
         return embeddings
+
+
+class Stem(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        norm_name: Union[Tuple, str, None] = "instance",
+        spatial_dims: int = 3,
+    ) -> None:
+        super(Stem, self).__init__()
+
+        self.conv = Conv[Conv.CONV, spatial_dims](
+            in_channels, out_channels, kernel_size=7, stride=4, padding=2
+        )
+        self.norm = self.norm1 = (
+            get_norm_layer(
+                name=norm_name, spatial_dims=spatial_dims, channels=out_channels
+            )
+            if norm_name
+            else nn.Identity()
+        )
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.norm(x)
+        return x
