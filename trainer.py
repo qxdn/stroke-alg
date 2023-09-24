@@ -62,7 +62,7 @@ print(model)
 # optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 # scheduler
-scheduler = StepLR(optimizer, step_size=40, gamma=0.1)
+scheduler = StepLR(optimizer, step_size=20, gamma=0.1)
 
 # device
 cpu = torch.device("cpu")
