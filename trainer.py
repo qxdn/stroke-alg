@@ -16,8 +16,10 @@ from monai.metrics import DiceMetric
 from monai.losses import DiceLoss, DiceCELoss, DiceFocalLoss
 from torch.utils.tensorboard import SummaryWriter
 from utils import set_seed, load_weight, get_config
+from monai.optimizers.lr_scheduler import WarmupCosineSchedule
 from torch.optim.lr_scheduler import StepLR, ExponentialLR
 from nets import UNETRET,CAFormerUnet
+
 
 join = os.path.join
 # 加速
@@ -62,7 +64,7 @@ print(model)
 # optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 # scheduler
-scheduler = ExponentialLR(optimizer, gamma=0.95)
+scheduler = WarmupCosineSchedule(optimizer, warmup_steps=config.warmup, t_total=epochs)
 
 # device
 cpu = torch.device("cpu")

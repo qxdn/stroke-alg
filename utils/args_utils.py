@@ -8,6 +8,7 @@ class Config(object):
     resume_path: Union[str,None] = None
     image_size: tuple 
     data_path: str 
+    warmup: int = 5
 
 def get_config() -> Config:
     parser = argparse.ArgumentParser()
@@ -19,6 +20,7 @@ def get_config() -> Config:
     parser.add_argument("--image_length", type=int, help="image_length", default=96)
     parser.add_argument("--image_width", type=int, help="image_width", default=96)
     parser.add_argument("--image_height", type=int, help="image_height", default=96)
+    parser.add_argument("--wramup", type=int, help="wramup step", default=5)
 
     args = parser.parse_args()
 
@@ -28,5 +30,6 @@ def get_config() -> Config:
     Config.resume_path = args.resume_path
     Config.image_size = (args.image_length,args.image_width,args.image_height)
     Config.data_path = args.data
+    Config.warmup = args.wramup
 
     return Config
