@@ -64,7 +64,7 @@ print(model)
 # optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 # scheduler
-scheduler = WarmupCosineSchedule(optimizer, warmup_steps=config.warmup, t_total=epochs)
+scheduler = WarmupCosineSchedule(optimizer, warmup_steps=config.warmup * accelerator.num_processes, t_total=epochs* accelerator.num_processes)
 
 # device
 cpu = torch.device("cpu")

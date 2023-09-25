@@ -82,6 +82,7 @@ class ISLES2022(BaseDataset):
                     label_key=y_key[0],
                     spatial_size=image_size,
                     num_samples=2,
+                    allow_smaller=True,
                 ),
                 # RandScaleCropd([image_key]+y_key,roi_scale=0.4),
                 RandAxisFlipd([image_key] + y_key, prob=0.5),
