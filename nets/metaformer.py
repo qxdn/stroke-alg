@@ -22,13 +22,16 @@ class UpSample(nn.Module):
         upsample_kernel_size: Union[Sequence[int], int],
         norm_name: Union[Tuple, str],
         res_block: bool = False,
+        add: bool = False,
     ) -> None:
         super(UpSample, self).__init__()
+
+        self.add = add
 
         upsample_stride = upsample_kernel_size
         self.transp_conv = get_conv_layer(
             spatial_dims,
-            in_channels + in_channels,
+            in_channels + in_channels if not self.add else in_channels,
             out_channels,
             kernel_size=upsample_kernel_size,
             stride=upsample_stride,
@@ -47,7 +50,10 @@ class UpSample(nn.Module):
         )
 
     def forward(self, inp, skip):
-        out = torch.cat((inp, skip), dim=1)
+        if self.add:
+            out = inp + skip
+        else:
+            out = torch.cat((inp, skip), dim=1)
         out = self.transp_conv(out)
         out = self.conv_block(out)
         return out
@@ -113,6 +119,7 @@ class CAFormerUnet(nn.Module):
         act: Union[Tuple, str] = ("RELU", {"inplace": True}),
         drop_path_rate=0.0,
         res_block: bool = True,
+        add: bool = False,
     ) -> None:
         super(CAFormerUnet, self).__init__()
 
@@ -172,6 +179,7 @@ class CAFormerUnet(nn.Module):
             upsample_kernel_size=2,
             norm_name=norm_name,
             res_block=res_block,
+            add=add,
         )
 
         self.decoder2 = UpSample(
@@ -182,6 +190,7 @@ class CAFormerUnet(nn.Module):
             upsample_kernel_size=2,
             norm_name=norm_name,
             res_block=res_block,
+            add=add,
         )
 
         self.decoder3 = UpSample(
@@ -192,23 +201,23 @@ class CAFormerUnet(nn.Module):
             upsample_kernel_size=2,
             norm_name=norm_name,
             res_block=res_block,
+            add=add,
         )
 
         self.decoder4 = UpSample(
             spatial_dims=spatial_dims,
             in_channels=dims[0],
-            out_channels=dims[0]//4,
+            out_channels=dims[0] // 4,
             kernel_size=3,
             upsample_kernel_size=4,
             norm_name=norm_name,
             res_block=res_block,
+            add=add,
         )
-
-       
 
         self.final_conv = get_conv_layer(
             spatial_dims,
-            dims[0]//4,
+            dims[0] // 4,
             in_channels,
             kernel_size=1,
             stride=1,
@@ -219,17 +228,17 @@ class CAFormerUnet(nn.Module):
     def forward(self, x):
         x, hidden_states = self.caformer(x)
 
-        y = self.skip_encoder1(hidden_states[3]) # /32
-        x = self.decoder1(x, y) # /16
+        y = self.skip_encoder1(hidden_states[3])  # /32
+        x = self.decoder1(x, y)  # /16
 
-        y = self.skip_encoder2(hidden_states[2]) # /16
-        x = self.decoder2(x, y) # /8
+        y = self.skip_encoder2(hidden_states[2])  # /16
+        x = self.decoder2(x, y)  # /8
 
-        y = self.skip_encoder3(hidden_states[1]) # /8
-        x = self.decoder3(x, y) # /4
+        y = self.skip_encoder3(hidden_states[1])  # /8
+        x = self.decoder3(x, y)  # /4
 
-        y = self.skip_encoder4(hidden_states[0]) # /4
-        x = self.decoder4(x, y) # /1
+        y = self.skip_encoder4(hidden_states[0])  # /4
+        x = self.decoder4(x, y)  # /1
 
         x = self.final_conv(x)
 

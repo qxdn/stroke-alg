@@ -52,7 +52,7 @@ val_dataloader = dataset.get_val_loader(batch_size=batch_size)
 #model = UNETRET(2, 2, image_sizes)
 # from testmodel import NN
 # model = NN(2, 2)
-model = CAFormerUnet(2,3,depths=(3,3,9,3),drop_path_rate=0.5)
+model = CAFormerUnet(2,3,depths=(3,3,9,3),drop_path_rate=0.5,add=False)
 
 if config.resume_path != None:
     model = load_weight(model, config.resume_path)
