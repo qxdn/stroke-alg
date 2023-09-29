@@ -18,7 +18,7 @@ from tensorboardX import SummaryWriter
 from utils import set_seed, load_weight, get_config
 from monai.optimizers.lr_scheduler import WarmupCosineSchedule
 from torch.optim.lr_scheduler import StepLR, ExponentialLR
-from nets import UNETRET,CAFormerUnet
+from nets import UNETRET,CAFormerUnet,SimpleCAUnet
 
 
 join = os.path.join
@@ -52,7 +52,8 @@ val_dataloader = dataset.get_val_loader(batch_size=batch_size)
 #model = UNETRET(2, 2, image_sizes)
 # from testmodel import NN
 # model = NN(2, 2)
-model = CAFormerUnet(2,3,depths=(3,3,9,3),drop_path_rate=0.5,add=False)
+# model = CAFormerUnet(2,3,depths=(3,3,9,3),drop_path_rate=0.5,add=False)
+model = SimpleCAUnet(2,drop_path_rate=0.5)
 
 if config.resume_path != None:
     model = load_weight(model, config.resume_path)
