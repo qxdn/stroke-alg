@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-from typing import Tuple, Union, Sequence
+from typing import Tuple, Union, Sequence, Optional
 from layers import Stem, MetaFormerStage
 from monai.networks.blocks.unetr_block import (
     UnetrBasicBlock,
@@ -239,6 +239,151 @@ class CAFormerUnet(nn.Module):
 
         y = self.skip_encoder4(hidden_states[0])  # /4
         x = self.decoder4(x, y)  # /1
+
+        x = self.final_conv(x)
+
+        return x
+
+
+class SimpleUpSample(nn.Module):
+    def __init__(
+        self,
+        spatial_dims: int,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: Union[Sequence[int], int],
+        upsample_kernel_size: Union[Sequence[int], int],
+        norm_name: Union[Tuple, str],
+        dropout: Optional[Union[Tuple, str, float]] = None,
+        act_name: Union[Tuple, str] = (
+            "leakyrelu",
+            {"inplace": True, "negative_slope": 0.01},
+        ),
+        upsameple_only: bool = False
+    ) -> None:
+        super(SimpleUpSample, self).__init__()
+
+        upsample_stride = upsample_kernel_size
+        self.transp_conv = get_conv_layer(
+            spatial_dims,
+            in_channels,
+            out_channels,
+            kernel_size=upsample_kernel_size,
+            stride=upsample_stride,
+            conv_only=True,
+            is_transposed=True,
+        )
+
+        self.conv_block = nn.Sequential(
+            get_conv_layer(
+                spatial_dims,
+                out_channels + out_channels if not upsameple_only else out_channels,
+                out_channels,
+                kernel_size=kernel_size,
+                stride=1,
+                dropout=dropout,
+                act=None,
+                norm=None,
+                conv_only=False,
+            ),
+            get_act_layer(act_name),
+            get_norm_layer(
+                name=norm_name, spatial_dims=spatial_dims, channels=out_channels
+            ),
+        )
+
+    def forward(self, inp, skip = None):
+        out = self.transp_conv(inp)
+        if skip is not None:
+            out = torch.cat((out, skip), dim=1)
+        out = self.conv_block(out)
+        return out
+
+
+class SimpleCAUnet(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        spatial_dims: int = 3,
+        depths=(2, 2, 6, 2),
+        dims=(64, 128, 320, 512),
+        norm_name: str = "instance",
+        act: Union[Tuple, str] = ("RELU", {"inplace": True}),
+        drop_path_rate=0.0,
+        res_block: bool = True,
+        add: bool = False,
+    ) -> None:
+        super(SimpleCAUnet, self).__init__()
+
+        self.caformer = CAFormer(
+            in_channels,
+            depths=depths,
+            dims=dims,
+            drop_path_rate=drop_path_rate,
+            spatial_dims=spatial_dims,
+        )
+
+        self.decoder1 = SimpleUpSample(
+            spatial_dims=spatial_dims,
+            in_channels=dims[3],
+            out_channels=dims[2],
+            kernel_size=3,
+            upsample_kernel_size=2,
+            norm_name=norm_name,
+        )
+
+        self.decoder2 = SimpleUpSample(
+            spatial_dims=spatial_dims,
+            in_channels=dims[2],
+            out_channels=dims[1],
+            kernel_size=3,
+            upsample_kernel_size=2,
+            norm_name=norm_name,
+        )
+
+        self.decoder3 = SimpleUpSample(
+            spatial_dims=spatial_dims,
+            in_channels=dims[1],
+            out_channels=dims[0],
+            kernel_size=3,
+            upsample_kernel_size=2,
+            norm_name=norm_name,
+        )
+
+        self.decoder4 = SimpleUpSample(
+            spatial_dims=spatial_dims,
+            in_channels=dims[0],
+            out_channels=dims[0] // 4,
+            kernel_size=3,
+            upsample_kernel_size=4,
+            norm_name=norm_name,
+            upsameple_only=True
+        )
+
+        self.final_conv = get_conv_layer(
+            spatial_dims,
+            dims[0] // 4,
+            in_channels,
+            kernel_size=1,
+            stride=1,
+            norm=norm_name,
+            act=act,
+        )
+
+    def forward(self, x):
+        x, hidden_states = self.caformer(x)
+
+        y = hidden_states[2]
+
+        x = self.decoder1(x, y)
+
+        y = hidden_states[1]
+        x = self.decoder2(x, y)  # /8
+
+        y = hidden_states[0]  # /8
+        x = self.decoder3(x, y)  # /4
+
+        x = self.decoder4(x)
 
         x = self.final_conv(x)
 

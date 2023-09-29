@@ -14,7 +14,7 @@ from monai.transforms import (
 from monai.data.utils import decollate_batch
 from monai.metrics import DiceMetric
 from monai.losses import DiceLoss, DiceCELoss, DiceFocalLoss
-from torch.utils.tensorboard import SummaryWriter
+from tensorboardX import SummaryWriter
 from utils import set_seed, load_weight, get_config
 from monai.optimizers.lr_scheduler import WarmupCosineSchedule
 from torch.optim.lr_scheduler import StepLR, ExponentialLR

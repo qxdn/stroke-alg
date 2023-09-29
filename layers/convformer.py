@@ -235,3 +235,47 @@ class MetaFormerStage(nn.Module):
         for block in self.blocks:
             x = block(x)
         return x
+
+
+class MetaPolypConvFormerBlock(ConvFormerBlock):
+    def __init__(
+        self,
+        in_channels: int,
+        head_dim: int = 32,
+        num_heads=None,
+        norm_name: str = "instance",
+        dropout_rate: float = 0.0,
+        spatial_dims: int = 3,
+        **kwargs,
+    ) -> None:
+        super().__init__(
+            in_channels=in_channels,
+            norm_name=norm_name,
+            dropout_rate=dropout_rate,
+            spatial_dims=spatial_dims,
+        )
+        self.spatial_dims = spatial_dims
+        num_heads = num_heads if num_heads else in_channels // head_dim
+        if num_heads == 0:
+            num_heads = 1
+        self.attn = SABlock(in_channels, num_heads, dropout_rate=dropout_rate)
+
+    def forward(self, x):
+        road = self.norm1(x)
+        road = self.dwconv(road)
+        # atten
+        if self.spatial_dims == 3:
+            B, C, H, W, D = road.shape
+            road = einops.rearrange(road, "b c h w d -> b (h w d) c")
+        else:
+            B, C, H, W = road.shape
+            road = einops.rearrange(road, "b c h w -> b (h w) c")
+        road = self.attn(road)
+        if self.spatial_dims == 3:
+            road = einops.rearrange(road, "b (h w d) c -> b c h w d", h=H, w=W, d=D)
+        else:
+            road = einops.rearrange(road, "b (h w) c -> b c h w", h=H, w=W)
+        road = self.dropout1(road)
+        x = x + road
+        x = x + self.dropout2(self.mlp(self.norm2(x)))
+        return x
