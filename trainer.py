@@ -19,7 +19,6 @@ from utils import set_seed, load_weight, get_config
 from monai.optimizers.lr_scheduler import WarmupCosineSchedule
 from torch.optim.lr_scheduler import StepLR, ExponentialLR
 from nets import UNETRET, CAFormerUnet, SimpleCAUnet, CAFormerPolyUnet
-import wandb
 
 join = os.path.join
 # 加速
