@@ -18,7 +18,7 @@ from tensorboardX import SummaryWriter
 from utils import set_seed, load_weight, get_config
 from monai.optimizers.lr_scheduler import WarmupCosineSchedule
 from torch.optim.lr_scheduler import StepLR, ExponentialLR
-from nets import UNETRET, CAFormerUnet, SimpleCAUnet
+from nets import UNETRET, CAFormerUnet, SimpleCAUnet, CAFormerPolyUnet
 import wandb
 
 join = os.path.join
@@ -64,10 +64,11 @@ val_dataloader = dataset.get_val_loader(batch_size=batch_size)
 # model
 # model = UNETR(2, 2, image_sizes)
 # model = UNETRET(2, 2, image_sizes)
-from testmodel import NN
-model = NN(2, 2)
+# from testmodel import NN
+# model = NN(2, 2)
 # model = CAFormerUnet(2,3,depths=(3,3,9,3),drop_path_rate=0.5,add=False)
 # model = SimpleCAUnet(2, drop_path_rate=0.5)
+model = CAFormerPolyUnet(2, drop_path_rate=0.5)
 
 if config.resume_path != None:
     model = load_weight(model, config.resume_path)
@@ -75,7 +76,8 @@ if config.resume_path != None:
 
 print(model)
 from torchinfo import summary
-summary(model, (1,2, *image_sizes),device='cpu')
+
+summary(model, (1, 2, *image_sizes), device="cpu")
 # optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 # scheduler
@@ -195,7 +197,9 @@ for epoch in range(epochs):
         #    unwrap_model.state_dict(), join(model_save_path, f"epoch_{epoch}.pth")
         # )
         # save latest model
-        accelerator.save(unwrap_model.state_dict(), join(model_save_path, "latest_model.pth"))
+        accelerator.save(
+            unwrap_model.state_dict(), join(model_save_path, "latest_model.pth")
+        )
         # save best model
         if best_dice < val_dice:
             best_dice = val_dice

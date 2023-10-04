@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch
 from typing import Tuple, Union, Sequence, Optional
-from layers import Stem, MetaFormerStage
+from layers import Stem, MetaFormerStage, MetaPolypConvFormerBlock
 from monai.networks.blocks.unetr_block import (
     UnetrBasicBlock,
     UnetrPrUpBlock,
@@ -259,7 +259,7 @@ class SimpleUpSample(nn.Module):
             "leakyrelu",
             {"inplace": True, "negative_slope": 0.01},
         ),
-        upsameple_only: bool = False
+        upsameple_only: bool = False,
     ) -> None:
         super(SimpleUpSample, self).__init__()
 
@@ -292,7 +292,7 @@ class SimpleUpSample(nn.Module):
             ),
         )
 
-    def forward(self, inp, skip = None):
+    def forward(self, inp, skip=None):
         out = self.transp_conv(inp)
         if skip is not None:
             out = torch.cat((out, skip), dim=1)
@@ -357,7 +357,7 @@ class SimpleCAUnet(nn.Module):
             kernel_size=3,
             upsample_kernel_size=4,
             norm_name=norm_name,
-            upsameple_only=True
+            upsameple_only=True,
         )
 
         self.final_conv = get_conv_layer(
@@ -384,6 +384,127 @@ class SimpleCAUnet(nn.Module):
         x = self.decoder3(x, y)  # /4
 
         x = self.decoder4(x)
+
+        x = self.final_conv(x)
+
+        return x
+
+
+class CAFormerPolyUnet(nn.Module):
+    def __init__(
+        self,
+        in_channels,
+        spatial_dims: int = 3,
+        depths=(2, 2, 6, 2),
+        dims=(64, 128, 320, 512),
+        norm_name: str = "instance",
+        act: Union[Tuple, str] = ("RELU", {"inplace": True}),
+        drop_path_rate=0.0,
+        res_block: bool = True,
+        add: bool = False,
+    ) -> None:
+        super(CAFormerPolyUnet, self).__init__()
+
+        self.caformer = CAFormer(
+            in_channels,
+            depths=depths,
+            dims=dims,
+            drop_path_rate=drop_path_rate,
+            spatial_dims=spatial_dims,
+        )
+
+        self.skip_encoder1 = MetaPolypConvFormerBlock(
+            spatial_dims=spatial_dims,
+            in_channels=dims[3],
+            norm_name=norm_name,
+        )
+
+        self.skip_encoder2 = MetaPolypConvFormerBlock(
+            spatial_dims=spatial_dims,
+            in_channels=dims[2],
+            norm_name=norm_name,
+        )
+
+        self.skip_encoder3 = MetaPolypConvFormerBlock(
+            spatial_dims=spatial_dims,
+            in_channels=dims[1],
+            norm_name=norm_name,
+        )
+
+        self.skip_encoder4 = MetaPolypConvFormerBlock(
+            in_channels=dims[0],
+            norm_name=norm_name,
+            spatial_dims=spatial_dims,
+        )
+
+        self.decoder1 = UpSample(
+            spatial_dims=spatial_dims,
+            in_channels=dims[3],
+            out_channels=dims[2],
+            kernel_size=3,
+            upsample_kernel_size=2,
+            norm_name=norm_name,
+            res_block=res_block,
+            add=add,
+        )
+
+        self.decoder2 = UpSample(
+            spatial_dims=spatial_dims,
+            in_channels=dims[2],
+            out_channels=dims[1],
+            kernel_size=3,
+            upsample_kernel_size=2,
+            norm_name=norm_name,
+            res_block=res_block,
+            add=add,
+        )
+
+        self.decoder3 = UpSample(
+            spatial_dims=spatial_dims,
+            in_channels=dims[1],
+            out_channels=dims[0],
+            kernel_size=3,
+            upsample_kernel_size=2,
+            norm_name=norm_name,
+            res_block=res_block,
+            add=add,
+        )
+
+        self.decoder4 = UpSample(
+            spatial_dims=spatial_dims,
+            in_channels=dims[0],
+            out_channels=dims[0] // 4,
+            kernel_size=3,
+            upsample_kernel_size=4,
+            norm_name=norm_name,
+            res_block=res_block,
+            add=add,
+        )
+
+        self.final_conv = get_conv_layer(
+            spatial_dims,
+            dims[0] // 4,
+            in_channels,
+            kernel_size=1,
+            stride=1,
+            norm=norm_name,
+            act=act,
+        )
+
+    def forward(self, x):
+        x, hidden_states = self.caformer(x)
+
+        y = self.skip_encoder1(hidden_states[3])  # /32
+        x = self.decoder1(x, y)  # /16
+
+        y = self.skip_encoder2(hidden_states[2])  # /16
+        x = self.decoder2(x, y)  # /8
+
+        y = self.skip_encoder3(hidden_states[1])  # /8
+        x = self.decoder3(x, y)  # /4
+
+        y = self.skip_encoder4(hidden_states[0])  # /4
+        x = self.decoder4(x, y)  # /1
 
         x = self.final_conv(x)
 
