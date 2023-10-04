@@ -64,10 +64,10 @@ val_dataloader = dataset.get_val_loader(batch_size=batch_size)
 # model
 # model = UNETR(2, 2, image_sizes)
 # model = UNETRET(2, 2, image_sizes)
-# from testmodel import NN
-# model = NN(2, 2)
+from testmodel import NN
+model = NN(2, 2)
 # model = CAFormerUnet(2,3,depths=(3,3,9,3),drop_path_rate=0.5,add=False)
-model = SimpleCAUnet(2, drop_path_rate=0.5)
+# model = SimpleCAUnet(2, drop_path_rate=0.5)
 
 if config.resume_path != None:
     model = load_weight(model, config.resume_path)
@@ -195,11 +195,11 @@ for epoch in range(epochs):
         #    unwrap_model.state_dict(), join(model_save_path, f"epoch_{epoch}.pth")
         # )
         # save latest model
-        torch.save(unwrap_model.state_dict(), join(model_save_path, "latest_model.pth"))
+        accelerator.save(unwrap_model.state_dict(), join(model_save_path, "latest_model.pth"))
         # save best model
         if best_dice < val_dice:
             best_dice = val_dice
-            torch.save(
+            accelerator.save(
                 unwrap_model.state_dict(), join(model_save_path, "best_model.pth")
             )
 
