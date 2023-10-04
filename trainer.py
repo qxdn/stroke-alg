@@ -18,26 +18,40 @@ from tensorboardX import SummaryWriter
 from utils import set_seed, load_weight, get_config
 from monai.optimizers.lr_scheduler import WarmupCosineSchedule
 from torch.optim.lr_scheduler import StepLR, ExponentialLR
-from nets import UNETRET,CAFormerUnet,SimpleCAUnet
-
+from nets import UNETRET, CAFormerUnet, SimpleCAUnet
+import wandb
 
 join = os.path.join
 # 加速
-accelerator = Accelerator()
-
-work_dir = "./work_dir"
-os.makedirs(work_dir, exist_ok=True)
-if accelerator.is_local_main_process:
-    model_save_path = join(work_dir, f"exp{len(os.listdir(work_dir)) + 1}")
-    writer = SummaryWriter(model_save_path)
-    os.makedirs(model_save_path, exist_ok=True)
-
-
+accelerator = Accelerator(log_with="wandb")
+# config
 config = get_config()
 epochs = config.epochs
 batch_size = config.batch_size
 image_sizes = config.image_size
 set_seed(config.seed)
+
+
+work_dir = "./work_dir"
+os.makedirs(work_dir, exist_ok=True)
+exp_name = f"exp{len(os.listdir(work_dir)) + 1}"
+model_save_path = join(work_dir, exp_name)
+if accelerator.is_local_main_process:
+    writer = SummaryWriter(model_save_path)
+    os.makedirs(model_save_path, exist_ok=True)
+
+# wandb
+accelerator.init_trackers(
+    project_name="stroke-segmentation",
+    config=config,
+    init_kwargs={
+        "wandb": {
+            "name": exp_name,
+            "dir": model_save_path,
+        }
+    },
+)
+
 
 dataset = ISLES2022(
     config.data_path,
@@ -49,23 +63,27 @@ val_dataloader = dataset.get_val_loader(batch_size=batch_size)
 
 # model
 # model = UNETR(2, 2, image_sizes)
-#model = UNETRET(2, 2, image_sizes)
+# model = UNETRET(2, 2, image_sizes)
 # from testmodel import NN
 # model = NN(2, 2)
 # model = CAFormerUnet(2,3,depths=(3,3,9,3),drop_path_rate=0.5,add=False)
-model = SimpleCAUnet(2,drop_path_rate=0.5)
+model = SimpleCAUnet(2, drop_path_rate=0.5)
 
 if config.resume_path != None:
     model = load_weight(model, config.resume_path)
     print("load weight from {}".format(config.resume_path))
 
 print(model)
-# from torchinfo import summary
-# summary(model, (1,2, 96, 96, 96),device='cpu')
+from torchinfo import summary
+summary(model, (1,2, *image_sizes),device='cpu')
 # optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 # scheduler
-scheduler = WarmupCosineSchedule(optimizer, warmup_steps=config.warmup * accelerator.num_processes, t_total=epochs* accelerator.num_processes)
+scheduler = WarmupCosineSchedule(
+    optimizer,
+    warmup_steps=config.warmup * accelerator.num_processes,
+    t_total=epochs * accelerator.num_processes,
+)
 
 # device
 cpu = torch.device("cpu")
@@ -119,6 +137,16 @@ for epoch in range(epochs):
             writer.add_scalar("train/dice", train_dice, epoch)
             writer.add_scalar("train/lr", scheduler.get_last_lr()[0], epoch)
 
+        # wandb
+        accelerator.log(
+            {
+                "train/loss": train_epoch_loss,
+                "train/dice": train_dice,
+                "train/lr": scheduler.get_last_lr()[0],
+            },
+            step=epoch,
+        )
+
     # val
     val_epoch_loss = 0
     model.eval()
@@ -154,6 +182,11 @@ for epoch in range(epochs):
                 writer.add_scalar("val/loss", val_epoch_loss, epoch)
                 writer.add_scalar("val/dice", val_dice, epoch)
 
+            # wandb
+            accelerator.log(
+                {"val/loss": val_epoch_loss, "val/dice": val_dice}, step=epoch
+            )
+
     # save model
     if accelerator.is_local_main_process:
         unwrap_model = accelerator.unwrap_model(model)
@@ -169,3 +202,6 @@ for epoch in range(epochs):
             torch.save(
                 unwrap_model.state_dict(), join(model_save_path, "best_model.pth")
             )
+
+
+accelerator.end_training()
