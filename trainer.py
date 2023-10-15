@@ -12,7 +12,7 @@ from monai.transforms import (
     AsDiscrete,
 )
 from monai.data.utils import decollate_batch
-from monai.metrics import DiceMetric
+from monai.metrics import DiceMetric, HausdorffDistanceMetric
 from monai.losses import DiceLoss, DiceCELoss, DiceFocalLoss
 from tensorboardX import SummaryWriter
 from utils import set_seed, load_weight, get_config
@@ -98,16 +98,17 @@ model, optimizer, scheduler, train_dataloader, val_dataloader = accelerator.prep
 # loss function
 loss_func = DiceFocalLoss(to_onehot_y=True, softmax=True)
 # metric
-metric = DiceMetric()
+metrics = {"dice": DiceMetric(), "hausdorff": HausdorffDistanceMetric()}
 post_pred = Compose([AsDiscrete(argmax=True, to_onehot=2)])
-post_label = AsDiscrete(to_onehot=2)
+post_label = Compose([AsDiscrete(threshold=0.5), AsDiscrete(to_onehot=2)])
 
 best_dice = 0
 for epoch in range(epochs):
     # train
     train_epoch_loss = 0
     model.train()
-    metric.reset()
+    for metric in metrics.values():
+        metric.reset()
     with tqdm(
         train_dataloader, unit="batch", disable=not accelerator.is_local_main_process
     ) as tepoch:
@@ -125,25 +126,31 @@ for epoch in range(epochs):
             # metric
             output = [post_pred(i) for i in decollate_batch(output)]
             label = [post_label(i) for i in decollate_batch(label)]
-            metric(output, label)
-            tepoch.set_postfix(
-                loss=train_epoch_loss / (step + 1), dice=metric.aggregate().item()
-            )
+            for metric in metrics.values():
+                metric(output, label)
+            metric_result = {}
+            for name, metric in metrics.items():
+                metric_result[name] = metric.aggregate().item()
+            tepoch.set_postfix(loss=train_epoch_loss / (step + 1), **metric_result)
 
         scheduler.step()
         train_epoch_loss /= step + 1
-        train_dice = metric.aggregate().item()
+        metric_result = {}
+        for name, metric in metrics.items():
+            metric_result[name] = metric.aggregate().item()
 
         if accelerator.is_local_main_process:
             writer.add_scalar("train/loss", train_epoch_loss, epoch)
-            writer.add_scalar("train/dice", train_dice, epoch)
+            writer.add_scalar("train/dice", metric_result["dice"], epoch)
+            writer.add_scalar("train/hausdorff", metric_result["hausdorff"], epoch)
             writer.add_scalar("train/lr", scheduler.get_last_lr()[0], epoch)
 
         # wandb
         accelerator.log(
             {
                 "train/loss": train_epoch_loss,
-                "train/dice": train_dice,
+                "train/dice": metric_result["dice"],
+                "train/hausdorff": metric_result["hausdorff"],
                 "train/lr": scheduler.get_last_lr()[0],
             },
             step=epoch,
@@ -171,23 +178,35 @@ for epoch in range(epochs):
                 loss = loss_func(output, label)
                 output = [post_pred(i) for i in decollate_batch(output)]
                 label = [post_label(i) for i in decollate_batch(label)]
-                metric(output, label)
+                for metric in metrics.values():
+                    metric(output, label)
+                metric_result = {}
+                for name, metric in metrics.items():
+                    metric_result[name] = metric.aggregate().item()
                 val_epoch_loss += loss.item()
-                tepoch.set_postfix(
-                    loss=val_epoch_loss / (step + 1), dice=metric.aggregate().item()
-                )
+                tepoch.set_postfix(loss=val_epoch_loss / (step + 1), **metric_result)
 
             val_epoch_loss /= step + 1
-            val_dice = metric.aggregate().item()
+            metric_result = {}
+            for name, metric in metrics.items():
+                metric_result[name] = metric.aggregate().item()
 
             if accelerator.is_local_main_process:
                 writer.add_scalar("val/loss", val_epoch_loss, epoch)
-                writer.add_scalar("val/dice", val_dice, epoch)
+                writer.add_scalar("val/dice", metric_result["dice"], epoch)
+                writer.add_scalar("val/hausdorff", metric_result["hausdorff"], epoch)
 
             # wandb
             accelerator.log(
-                {"val/loss": val_epoch_loss, "val/dice": val_dice}, step=epoch
+                {
+                    "val/loss": val_epoch_loss,
+                    "val/dice": metric_result["dice"],
+                    "val/hausdorff": metric_result["hausdorff"],
+                },
+                step=epoch,
             )
+
+            val_dice = metric_result["dice"]
 
     # save model
     if accelerator.is_local_main_process:

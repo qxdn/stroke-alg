@@ -2,7 +2,7 @@ import os
 from utils import load_weight, get_config
 from datasets import ISLES2022
 from monai.networks.nets import UNETR
-from monai.metrics import DiceMetric
+from monai.metrics import DiceMetric,HausdorffDistanceMetric
 from monai.transforms import (
     Compose,
     Activations,
@@ -52,15 +52,16 @@ device = accelerator.device
 model,val_dataloader = accelerator.prepare(model,val_dataloader)
 
 # metric
-metric = DiceMetric()
+metrics = {"dice": DiceMetric(),"hausdorff": HausdorffDistanceMetric()}
 # loss function
 loss_func = DiceFocalLoss(to_onehot_y=True, softmax=True)
 post_pred = Compose([AsDiscrete(argmax=True, to_onehot=2)])
-post_label = AsDiscrete(to_onehot=2)
+post_label = Compose([AsDiscrete(threshold=0.5), AsDiscrete(to_onehot=2)])
 
 model.to(device)
 model.eval()
-metric.reset()
+for metric in metrics.values():
+    metric.reset()
 val_loss = 0
 
 with torch.no_grad():
@@ -75,11 +76,14 @@ with torch.no_grad():
             loss = loss_func(output, label)
             output = [post_pred(i) for i in decollate_batch(output)]
             label = [post_label(i) for i in decollate_batch(label)]
-            metric(output, label)
+            for metric in metrics.values():
+                metric(output, label)
             val_loss += loss.item()
+            metric_result = {}
+            for name, metric in metrics.items():
+                metric_result[name] = metric.aggregate().item()
             tepoch.set_postfix(
-                loss=val_loss / (step + 1), dice=metric.aggregate().item()
-            )
+                loss=val_loss / (step + 1), **metric_result          )
 
             if accelerator.is_local_main_process and step % 10 == 0:
                 # save image
@@ -110,7 +114,7 @@ with torch.no_grad():
                 plt.savefig(join(model_save_path,f'step_{step}.png'))
         
         val_loss /= step + 1
-        val_dice = metric.aggregate().item()
+        val_dice = metrics['dice'].aggregate().item()
         
         if accelerator.is_local_main_process:
             print(f"val loss: {val_loss}, val dice: {val_dice}")
