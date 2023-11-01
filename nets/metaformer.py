@@ -111,7 +111,8 @@ class CAFormer(nn.Module):
 class CAFormerUnet(nn.Module):
     def __init__(
         self,
-        in_channels,
+        in_channels: int,
+        out_channels: int,
         spatial_dims: int = 3,
         depths=(2, 2, 6, 2),
         dims=(64, 128, 320, 512),
@@ -218,7 +219,7 @@ class CAFormerUnet(nn.Module):
         self.final_conv = get_conv_layer(
             spatial_dims,
             dims[0] // 4,
-            in_channels,
+            out_channels,
             kernel_size=1,
             stride=1,
             norm=norm_name,
@@ -303,7 +304,8 @@ class SimpleUpSample(nn.Module):
 class SimpleCAUnet(nn.Module):
     def __init__(
         self,
-        in_channels,
+        in_channels: int,
+        out_channels: int,
         spatial_dims: int = 3,
         depths=(2, 2, 6, 2),
         dims=(64, 128, 320, 512),
@@ -363,7 +365,7 @@ class SimpleCAUnet(nn.Module):
         self.final_conv = get_conv_layer(
             spatial_dims,
             dims[0] // 4,
-            in_channels,
+            out_channels,
             kernel_size=1,
             stride=1,
             norm=norm_name,

@@ -1,24 +1,22 @@
 import torch
-from datasets import ISLES2022
+from datasets import ISLES2017
 from tqdm import tqdm
 from accelerate import Accelerator
 import os
-import monai
-from monai.networks.nets import UNETR
-from monai.inferers import sliding_window_inference
+from utils import set_seed, load_weight, get_config
+from tqdm import tqdm
+from tensorboardX import SummaryWriter
 from monai.transforms import (
     Compose,
-    Activations,
     AsDiscrete,
 )
 from monai.data.utils import decollate_batch
-from monai.metrics import DiceMetric, HausdorffDistanceMetric
-from monai.losses import DiceLoss, DiceCELoss, DiceFocalLoss
-from tensorboardX import SummaryWriter
-from utils import set_seed, load_weight, get_config
+from monai.networks.nets import SegResNet
 from monai.optimizers.lr_scheduler import WarmupCosineSchedule
-from torch.optim.lr_scheduler import StepLR, ExponentialLR
-from nets import UNETRET, CAFormerUnet, SimpleCAUnet, CAFormerPolyUnet, DuckNet
+from monai.losses.dice import DiceFocalLoss
+from monai.metrics import DiceMetric, HausdorffDistanceMetric
+from monai.inferers import sliding_window_inference
+
 
 join = os.path.join
 # 加速
@@ -30,8 +28,7 @@ batch_size = config.batch_size
 image_sizes = config.image_size
 set_seed(config.seed)
 
-
-work_dir = "./work_dir"
+work_dir = "./outcome_work_dir"
 os.makedirs(work_dir, exist_ok=True)
 exp_name = f"exp{len(os.listdir(work_dir)) + 1}"
 model_save_path = join(work_dir, exp_name)
@@ -39,9 +36,9 @@ if accelerator.is_local_main_process:
     writer = SummaryWriter(model_save_path)
     os.makedirs(model_save_path, exist_ok=True)
 
-# wandb
+
 accelerator.init_trackers(
-    project_name="stroke-segmentation",
+    project_name="stroke-outcome",
     config=config,
     init_kwargs={
         "wandb": {
@@ -51,24 +48,20 @@ accelerator.init_trackers(
     },
 )
 
-
-dataset = ISLES2022(
+datasets = ISLES2017(
     config.data_path,
     image_size=image_sizes,
 )
-train_dataloader = dataset.get_train_loader(batch_size=batch_size)
-val_dataloader = dataset.get_val_loader(batch_size=batch_size)
 
+train_dataloader = datasets.get_train_loader(batch_size=batch_size)
+val_dataloader = datasets.get_val_loader(batch_size=batch_size)
 
-# model
-# model = UNETR(2, 2, image_sizes)
-# model = UNETRET(2, 2, image_sizes)
-# from testmodel import NN
-# model = NN(2, 2)
-# model = CAFormerUnet(2,2,3,depths=(3,3,9,3),drop_path_rate=0.5,add=False)
-# model = SimpleCAUnet(2, drop_path_rate=0.5)
-# model = CAFormerPolyUnet(2, drop_path_rate=0.5)
-model = DuckNet(2, 2)
+model = SegResNet(
+    spatial_dims=3,
+    in_channels=6,
+    out_channels=2,
+    dropout_prob=0.2,
+)
 
 if config.resume_path != None:
     model = load_weight(model, config.resume_path)
@@ -77,9 +70,9 @@ if config.resume_path != None:
 print(model)
 from torchinfo import summary
 
-summary(model, (1, 2, *image_sizes), device="cpu")
+summary(model, (1, 6, *image_sizes), device="cpu")
 # optimizer
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 # scheduler
 scheduler = WarmupCosineSchedule(
     optimizer,
@@ -95,7 +88,7 @@ model.to(device)
 model, optimizer, scheduler, train_dataloader, val_dataloader = accelerator.prepare(
     model, optimizer, scheduler, train_dataloader, val_dataloader
 )
-# loss function
+# loss func
 loss_func = DiceFocalLoss(to_onehot_y=True, softmax=True)
 # metric
 metrics = {"dice": DiceMetric(), "hausdorff": HausdorffDistanceMetric()}
@@ -109,15 +102,14 @@ for epoch in range(epochs):
     model.train()
     for metric in metrics.values():
         metric.reset()
+
     with tqdm(
         train_dataloader, unit="batch", disable=not accelerator.is_local_main_process
     ) as tepoch:
         for step, batch_data in enumerate(tepoch):
             tepoch.set_description(f"Train Epoch {epoch}")
             optimizer.zero_grad()
-            image, label = batch_data["image"].to(device), batch_data["label"].to(
-                device
-            )
+            image, label = batch_data["image"].to(device), batch_data["OT"].to(device)
             output = model(image)
             loss = loss_func(output, label)
             accelerator.backward(loss)
@@ -143,7 +135,7 @@ for epoch in range(epochs):
             writer.add_scalar("train/loss", train_epoch_loss, epoch)
             writer.add_scalar("train/dice", metric_result["dice"], epoch)
             writer.add_scalar("train/hausdorff", metric_result["hausdorff"], epoch)
-            writer.add_scalar("train/lr", scheduler.get_last_lr()[0], epoch)
+            writer.add_scalar("lr", scheduler.get_last_lr()[0], epoch)
 
         # wandb
         accelerator.log(
@@ -156,67 +148,69 @@ for epoch in range(epochs):
             step=epoch,
         )
 
-    # val
-    val_epoch_loss = 0
-    model.eval()
-    for metric in metrics.values():
-        metric.reset()
-    with torch.no_grad():
-        with tqdm(
-            val_dataloader,
-            unit="batch",
-            disable=not accelerator.is_local_main_process,
-        ) as tepoch:
-            for step, batch_data in enumerate(tepoch):
-                tepoch.set_description(f"Val Epoch {epoch}")
-                image, label = batch_data["image"].to(device), batch_data["label"].to(
-                    device
-                )
-                # 推理
-                output = sliding_window_inference(
-                    image, image_sizes, sw_batch_size=batch_size, predictor=model
-                )
-                loss = loss_func(output, label)
-                output = [post_pred(i) for i in decollate_batch(output)]
-                label = [post_label(i) for i in decollate_batch(label)]
-                for metric in metrics.values():
-                    metric(output, label)
+        # val
+        val_epoch_loss = 0
+        model.eval()
+        for metric in metrics.values():
+            metric.reset()
+        with torch.no_grad():
+            with tqdm(
+                val_dataloader,
+                unit="batch",
+                disable=not accelerator.is_local_main_process,
+            ) as tepoch:
+                for step, batch_data in enumerate(tepoch):
+                    tepoch.set_description(f"Val Epoch {epoch}")
+                    image, label = batch_data["image"].to(device), batch_data["OT"].to(
+                        device
+                    )
+
+                    output = sliding_window_inference(
+                        image, image_sizes, sw_batch_size=batch_size, predictor=model
+                    )
+
+                    loss = loss_func(output, label)
+                    output = [post_pred(i) for i in decollate_batch(output)]
+                    label = [post_label(i) for i in decollate_batch(label)]
+                    for metric in metrics.values():
+                        metric(output, label)
+
+                    metric_result = {}
+                    for name, metric in metrics.items():
+                        metric_result[name] = metric.aggregate().item()
+
+                    val_epoch_loss += loss.item()
+                    tepoch.set_postfix(
+                        loss=val_epoch_loss / (step + 1), **metric_result
+                    )
+
+                val_epoch_loss /= step + 1
                 metric_result = {}
                 for name, metric in metrics.items():
                     metric_result[name] = metric.aggregate().item()
-                val_epoch_loss += loss.item()
-                tepoch.set_postfix(loss=val_epoch_loss / (step + 1), **metric_result)
 
-            val_epoch_loss /= step + 1
-            metric_result = {}
-            for name, metric in metrics.items():
-                metric_result[name] = metric.aggregate().item()
+                if accelerator.is_local_main_process:
+                    writer.add_scalar("val/loss", val_epoch_loss, epoch)
+                    writer.add_scalar("val/dice", metric_result["dice"], epoch)
+                    writer.add_scalar(
+                        "val/hausdorff", metric_result["hausdorff"], epoch
+                    )
 
-            if accelerator.is_local_main_process:
-                writer.add_scalar("val/loss", val_epoch_loss, epoch)
-                writer.add_scalar("val/dice", metric_result["dice"], epoch)
-                writer.add_scalar("val/hausdorff", metric_result["hausdorff"], epoch)
+                # wandb
+                accelerator.log(
+                    {
+                        "val/loss": val_epoch_loss,
+                        "val/dice": metric_result["dice"],
+                        "val/hausdorff": metric_result["hausdorff"],
+                    },
+                    step=epoch,
+                )
 
-            # wandb
-            accelerator.log(
-                {
-                    "val/loss": val_epoch_loss,
-                    "val/dice": metric_result["dice"],
-                    "val/hausdorff": metric_result["hausdorff"],
-                },
-                step=epoch,
-            )
-
-            val_dice = metric_result["dice"]
+                val_dice = metric_result["dice"]
 
     # save model
     if accelerator.is_local_main_process:
         unwrap_model = accelerator.unwrap_model(model)
-        # save epoch model
-        # torch.save(
-        #    unwrap_model.state_dict(), join(model_save_path, f"epoch_{epoch}.pth")
-        # )
-        # save latest model
         accelerator.save(
             unwrap_model.state_dict(), join(model_save_path, "latest_model.pth")
         )

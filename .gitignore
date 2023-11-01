@@ -5,6 +5,7 @@ __pycache__
 
 
 /work_dir*
+/outcome_work_dir*
 
 test.py
 testmodel.py
