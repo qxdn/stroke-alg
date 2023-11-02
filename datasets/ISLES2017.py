@@ -82,7 +82,7 @@ class ISLES2017(BaseDataset):
                     range_z=180,
                     prob=0.5,
                 ),
-                ToTensord(keys=[image_key, label_key]),
+                ToTensord(keys=[image_key, label_key], track_meta=False),
             ]
         )
 
@@ -91,6 +91,7 @@ class ISLES2017(BaseDataset):
                 LoadImaged(keys=x_key + [label_key]),
                 EnsureChannelFirstd(keys=x_key + [label_key]),
                 ConcatItemsd(keys=x_key, name=image_key),
+                ToTensord(keys=[image_key, label_key], track_meta=False),
             ]
         )
 
