@@ -74,10 +74,10 @@ if config.resume_path != None:
     model = load_weight(model, config.resume_path)
     print("load weight from {}".format(config.resume_path))
 
-print(model)
-from torchinfo import summary
-
-summary(model, (1, 2, *image_sizes), device="cpu")
+accelerator.print(model)
+if accelerator.is_local_main_process:
+    from torchinfo import summary
+    summary(model, (1, 2, *image_sizes), device="cpu")
 # optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
 # scheduler

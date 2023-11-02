@@ -16,6 +16,7 @@ from monai.optimizers.lr_scheduler import WarmupCosineSchedule
 from monai.losses.dice import DiceFocalLoss
 from monai.metrics import DiceMetric, HausdorffDistanceMetric
 from monai.inferers import sliding_window_inference
+from nets import DSCNet
 
 
 join = os.path.join
@@ -62,16 +63,20 @@ val_dataloader = datasets.get_val_loader(batch_size=batch_size)
 #    out_channels=2,
 #    dropout_prob=0.2,
 # )
-model = UNETR(in_channels=6, out_channels=2, img_size=image_sizes, dropout_rate=0.5)
+# model = UNETR(in_channels=6, out_channels=2, img_size=image_sizes, dropout_rate=0.5)
+model = DSCNet(6, 2)
 
 if config.resume_path != None:
     model = load_weight(model, config.resume_path)
     print("load weight from {}".format(config.resume_path))
 
-print(model)
-from torchinfo import summary
+accelerator.print(model)
 
-summary(model, (1, 6, *image_sizes), device="cpu")
+if accelerator.is_local_main_process:
+    from torchinfo import summary
+
+    summary(model, (1, 6, *image_sizes), device="cpu")
+
 # optimizer
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 # scheduler
