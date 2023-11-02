@@ -11,7 +11,7 @@ from monai.transforms import (
     AsDiscrete,
 )
 from monai.data.utils import decollate_batch
-from monai.networks.nets import SegResNet
+from monai.networks.nets import SegResNet, UNETR
 from monai.optimizers.lr_scheduler import WarmupCosineSchedule
 from monai.losses.dice import DiceFocalLoss
 from monai.metrics import DiceMetric, HausdorffDistanceMetric
@@ -56,12 +56,13 @@ datasets = ISLES2017(
 train_dataloader = datasets.get_train_loader(batch_size=batch_size)
 val_dataloader = datasets.get_val_loader(batch_size=batch_size)
 
-model = SegResNet(
-    spatial_dims=3,
-    in_channels=6,
-    out_channels=2,
-    dropout_prob=0.2,
-)
+# model = SegResNet(
+#    spatial_dims=3,
+#    in_channels=6,
+#    out_channels=2,
+#    dropout_prob=0.2,
+# )
+model = UNETR(in_channels=6, out_channels=2, img_size=image_sizes, dropout_rate=0.5)
 
 if config.resume_path != None:
     model = load_weight(model, config.resume_path)
