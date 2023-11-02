@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import torch
 from torch import nn
+import warnings
 
 
 class DSConv3d(nn.Module):
@@ -97,7 +98,9 @@ class DCN3d(object):
             z = torch.linspace(0, 0, 1)
             y = torch.linspace(0, 0, 1)
             x = torch.linspace(-int(self.num_points//2), int(self.num_points//2), int(self.num_points))
-            z, y, x = torch.meshgrid(z, y, x)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                z, y, x = torch.meshgrid(z, y, x)
             z_spread = z.reshape(-1, 1)
             y_spread = y.reshape(-1, 1)
             x_spread = x.reshape(-1, 1)
@@ -164,7 +167,9 @@ class DCN3d(object):
             z = torch.linspace(0, 0, 1)
             y = torch.linspace(-int(self.num_points // 2), int(self.num_points // 2), int(self.num_points))
             x = torch.linspace(0, 0, 1)
-            z, y, x = torch.meshgrid(z, y, x)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                z, y, x = torch.meshgrid(z, y, x)
             z_spread = z.reshape(-1, 1)
             y_spread = y.reshape(-1, 1)
             x_spread = x.reshape(-1, 1)
@@ -227,7 +232,9 @@ class DCN3d(object):
             z = torch.linspace(-int(self.num_points // 2), int(self.num_points // 2), int(self.num_points))
             y = torch.linspace(0, 0, 1)
             x = torch.linspace(0, 0, 1)
-            z, y, x = torch.meshgrid(z, y, x)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                z, y, x = torch.meshgrid(z, y, x)
             z_spread = z.reshape(-1, 1)
             y_spread = y.reshape(-1, 1)
             x_spread = x.reshape(-1, 1)
