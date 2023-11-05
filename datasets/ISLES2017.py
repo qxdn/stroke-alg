@@ -77,10 +77,10 @@ class ISLES2017(BaseDataset):
                 NormalizeIntensityd(keys=[image_key]),
                 RandRotated(
                     keys=[image_key, label_key],
-                    range_x=180,
-                    range_y=180,
-                    range_z=180,
-                    prob=0.5,
+                    range_x=90,
+                    range_y=90,
+                    range_z=90,
+                    prob=0.3,
                 ),
                 ToTensord(keys=[image_key, label_key], track_meta=False),
             ]
@@ -153,19 +153,20 @@ class ISLES2017V2(ISLES2017):
                 ConcatItemsd(keys=lesion_key, name=image_lesion_key),
                 ConcatItemsd(keys=blood_key, name=image_blood_key),
                 ConcatItemsd(keys=[image_lesion_key, image_blood_key], name=image_key),
-                NormalizeIntensityd(keys=[image_key]),
-                RandRotated(
-                    keys=[image_key, label_key],
-                    range_x=180,
-                    range_y=180,
-                    range_z=180,
-                    prob=0.5,
-                ),
+                DeleteItemsd(keys=[image_lesion_key, image_blood_key] + x_key ),
                 RandCropByPosNegLabeld(
                     keys=[image_key, label_key],
                     label_key=label_key,
                     spatial_size=image_size,
                     num_samples=2,
+                ),
+                NormalizeIntensityd(keys=[image_key]),
+                RandRotated(
+                    keys=[image_key, label_key],
+                    range_x=90,
+                    range_y=90,
+                    range_z=90,
+                    prob=0.3,
                 ),
                 ToTensord(keys=[image_key, label_key], track_meta=False),
             ]
