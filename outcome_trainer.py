@@ -66,7 +66,7 @@ val_dataloader = datasets.get_val_loader(batch_size=batch_size)
 # model = UNETR(in_channels=6, out_channels=2, img_size=image_sizes, dropout_rate=0.5)
 # model = DSCNet(6, 2)
 model = DSSegResNetWrapper(
-    lesion_in_channels=4, blood_in_channels=3, out_channels=2, init_filters=16
+    lesion_in_channels=4, blood_in_channels=3, out_channels=2
 )
 
 if config.resume_path != None:
