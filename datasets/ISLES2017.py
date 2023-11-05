@@ -121,3 +121,63 @@ class ISLES2017(BaseDataset):
             shuffle=shuffle,
             **kwargs
         )
+
+
+class ISLES2017V2(ISLES2017):
+    def __init__(
+        self,
+        isles_data_dir: str = "D:/Code/ML_ISLES2017/data/ISLES/train",
+        image_size: Sequence[int] = (96, 96, 16),
+        test_size: float = 0.3,
+    ) -> None:
+        super().__init__(isles_data_dir, image_size, test_size)
+
+        x_key, label_key = [
+            "MR_ADC",
+            "MR_MTT",
+            "MR_rCBF",
+            "MR_rCBV",
+            "MR_Tmax",
+            "MR_TTP",
+        ], "OT"
+        lesion_key = ["MR_ADC", "MR_TTP", "MR_MTT", "MR_Tmax"]
+        blood_key = ["MR_ADC", "MR_rCBV", "MR_rCBF"]
+        image_lesion_key = "image_lesion"
+        image_blood_key = "image_blood"
+        image_key = "image"
+
+        self.train_transform = Compose(
+            [
+                LoadImaged(keys=x_key + [label_key]),
+                EnsureChannelFirstd(keys=x_key + [label_key]),
+                ConcatItemsd(keys=lesion_key, name=image_lesion_key),
+                ConcatItemsd(keys=blood_key, name=image_blood_key),
+                ConcatItemsd(keys=[image_lesion_key, image_blood_key], name=image_key),
+                RandCropByPosNegLabeld(
+                    keys=[image_key, label_key],
+                    label_key=label_key,
+                    spatial_size=image_size,
+                    num_samples=2,
+                ),
+                NormalizeIntensityd(keys=[image_key]),
+                RandRotated(
+                    keys=[image_key, label_key],
+                    range_x=180,
+                    range_y=180,
+                    range_z=180,
+                    prob=0.5,
+                ),
+                ToTensord(keys=[image_key, label_key], track_meta=False),
+            ]
+        )
+
+        self.val_transform = Compose(
+            [
+                LoadImaged(keys=x_key + [label_key]),
+                EnsureChannelFirstd(keys=x_key + [label_key]),
+                ConcatItemsd(keys=lesion_key, name=image_lesion_key),
+                ConcatItemsd(keys=blood_key, name=image_blood_key),
+                ConcatItemsd(keys=[image_lesion_key, image_blood_key], name=image_key),
+                ToTensord(keys=[image_key, label_key], track_meta=False),
+            ]
+        )
