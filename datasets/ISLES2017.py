@@ -91,6 +91,7 @@ class ISLES2017(BaseDataset):
                 LoadImaged(keys=x_key + [label_key]),
                 EnsureChannelFirstd(keys=x_key + [label_key]),
                 ConcatItemsd(keys=x_key, name=image_key),
+                NormalizeIntensityd(keys=[image_key]),
                 ToTensord(keys=[image_key, label_key], track_meta=False),
             ]
         )
@@ -179,6 +180,7 @@ class ISLES2017V2(ISLES2017):
                 ConcatItemsd(keys=lesion_key, name=image_lesion_key),
                 ConcatItemsd(keys=blood_key, name=image_blood_key),
                 ConcatItemsd(keys=[image_lesion_key, image_blood_key], name=image_key),
+                NormalizeIntensityd(keys=[image_key]),
                 ToTensord(keys=[image_key, label_key], track_meta=False),
             ]
         )
