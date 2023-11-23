@@ -16,7 +16,7 @@ from monai.optimizers.lr_scheduler import WarmupCosineSchedule
 from monai.losses.dice import DiceFocalLoss
 from monai.metrics import DiceMetric, HausdorffDistanceMetric
 from monai.inferers import sliding_window_inference
-from nets import DSCNet, DSSegResNetWrapper
+from nets import DSCNet, DSSegResNetWrapper, EMA
 
 
 join = os.path.join
@@ -49,7 +49,7 @@ accelerator.init_trackers(
     },
 )
 
-datasets = ISLES2017V2(
+datasets = ISLES2017(
     config.data_path,
     image_size=image_sizes,
 )
@@ -64,21 +64,30 @@ val_dataloader = datasets.get_val_loader(batch_size=batch_size)
 #    dropout_prob=0.2,
 # )
 # model = UNETR(in_channels=6, out_channels=2, img_size=image_sizes, dropout_rate=0.5)
-# model = DSCNet(6, 2)
-model = DSSegResNetWrapper(
-    lesion_in_channels=4, blood_in_channels=3, out_channels=2
-)
+model = DSCNet(6, 2)
+# model = DSSegResNetWrapper(
+#    lesion_in_channels=4, blood_in_channels=3, out_channels=2
+# )
 
 if config.resume_path != None:
     model = load_weight(model, config.resume_path)
     print("load weight from {}".format(config.resume_path))
+
+ema_model = EMA(
+    model,
+    beta=0.9999,
+    power=1,
+    update_every=10,
+    update_after_step=10,
+    allow_different_devices=True,
+)
 
 accelerator.print(model)
 
 if accelerator.is_local_main_process:
     from torchinfo import summary
 
-    summary(model, (1, 7, *image_sizes), device="cpu")
+    summary(model, (1, 6, *image_sizes), device="cpu")
 
 # optimizer
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
@@ -94,8 +103,15 @@ cpu = torch.device("cpu")
 device = accelerator.device
 model.to(device)
 # train
-model, optimizer, scheduler, train_dataloader, val_dataloader = accelerator.prepare(
-    model, optimizer, scheduler, train_dataloader, val_dataloader
+(
+    model,
+    optimizer,
+    scheduler,
+    train_dataloader,
+    val_dataloader,
+    ema_model,
+) = accelerator.prepare(
+    model, optimizer, scheduler, train_dataloader, val_dataloader, ema_model
 )
 # loss func
 loss_func = DiceFocalLoss(to_onehot_y=True, softmax=True)
@@ -133,6 +149,8 @@ for epoch in range(epochs):
             for name, metric in metrics.items():
                 metric_result[name] = metric.aggregate().item()
             tepoch.set_postfix(loss=train_epoch_loss / (step + 1), **metric_result)
+
+            ema_model.update()
 
         scheduler.step()
         train_epoch_loss /= step + 1
@@ -174,8 +192,16 @@ for epoch in range(epochs):
                         device
                     )
 
+                    """
                     output = sliding_window_inference(
                         image, image_sizes, sw_batch_size=batch_size, predictor=model
+                    )
+                    """
+                    output = sliding_window_inference(
+                        image,
+                        image_sizes,
+                        sw_batch_size=batch_size,
+                        predictor=ema_model,
                     )
 
                     loss = loss_func(output, label)
@@ -220,8 +246,13 @@ for epoch in range(epochs):
     # save model
     if accelerator.is_local_main_process:
         unwrap_model = accelerator.unwrap_model(model)
+        unwrap_ema = accelerator.unwrap_model(ema_model)
+        # save epoch model
         accelerator.save(
             unwrap_model.state_dict(), join(model_save_path, "latest_model.pth")
+        )
+        accelerator.save(
+            unwrap_ema.model.state_dict(), join(model_save_path, "ema_latest.pth")
         )
         # save best model
         if best_dice < val_dice:
@@ -229,6 +260,8 @@ for epoch in range(epochs):
             accelerator.save(
                 unwrap_model.state_dict(), join(model_save_path, "best_model.pth")
             )
-
+            accelerator.save(
+                unwrap_ema.model.state_dict(), join(model_save_path, "ema_best.pth")
+            )
 
 accelerator.end_training()

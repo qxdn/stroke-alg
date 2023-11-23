@@ -5,3 +5,4 @@ from .metaformer import CAFormer,CAFormerUnet,SimpleCAUnet,CAFormerPolyUnet
 from .ducknet import DuckNet
 from .dsnet import DSCNet
 from .dsconvsegresnet import DSSegResNet,DSSegResNetWrapper
+from .ema import EMA
