@@ -115,7 +115,8 @@ with torch.no_grad():
         
         val_loss /= step + 1
         val_dice = metrics['dice'].aggregate().item()
+        val_hausdorff = metrics['hausdorff'].aggregate().item()
         
         if accelerator.is_local_main_process:
-            print(f"val loss: {val_loss}, val dice: {val_dice}")
+            print(f"val loss: {val_loss}, val dice: {val_dice}, val hausdorff: {val_hausdorff}")
         
