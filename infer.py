@@ -17,6 +17,7 @@ import shutil
 import numpy as np
 import matplotlib.pyplot as plt
 from accelerate import Accelerator
+from thop import profile
 
 join = os.path.join
 # 加速
@@ -63,6 +64,14 @@ model.eval()
 for metric in metrics.values():
     metric.reset()
 val_loss = 0
+
+
+# TFLOPS
+input = torch.randn(2, 2, 96, 96, 96).to(device)
+macs, params = profile(model, inputs=(input, ))
+print(f"MACs: {macs / 10e12}T, TFLOPs: {2 * macs / 10e12}, Params: {params / 10e6}M")
+
+
 
 with torch.no_grad():
     with tqdm(val_dataloader,unit="batch",disable=not accelerator.is_local_main_process) as tepoch:
