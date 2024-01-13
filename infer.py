@@ -2,7 +2,7 @@ import os
 from utils import load_weight, get_config
 from datasets import ISLES2022
 from monai.networks.nets import UNETR
-from monai.metrics import DiceMetric,HausdorffDistanceMetric
+from monai.metrics import DiceMetric, HausdorffDistanceMetric, compute_roc_auc
 from monai.transforms import (
     Compose,
     Activations,
@@ -18,6 +18,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from accelerate import Accelerator
 from thop import profile
+from sklearn.metrics import roc_curve
 
 join = os.path.join
 # 加速
@@ -53,7 +54,7 @@ device = accelerator.device
 model,val_dataloader = accelerator.prepare(model,val_dataloader)
 
 # metric
-metrics = {"dice": DiceMetric(),"hausdorff": HausdorffDistanceMetric()}
+metrics = {"dice": DiceMetric(), "hausdorff": HausdorffDistanceMetric()}
 # loss function
 loss_func = DiceFocalLoss(to_onehot_y=True, softmax=True)
 post_pred = Compose([AsDiscrete(argmax=True, to_onehot=2)])
@@ -82,9 +83,26 @@ with torch.no_grad():
             output = sliding_window_inference(
                 image, image_sizes, sw_batch_size=batch_size, predictor=model
             )
+            outputs = output.flatten().cpu()
+
             loss = loss_func(output, label)
             output = [post_pred(i) for i in decollate_batch(output)]
             label = [post_label(i) for i in decollate_batch(label)]
+
+            labels = torch.cat(label).flatten().cpu()
+            auc_value = compute_roc_auc(outputs, labels)
+            fpr, tpr, thresholds = roc_curve(labels, outputs)
+            plt.figure()
+            plt.plot(fpr, tpr, color='darkorange', label='ROC curve (area = %0.2f)' % auc_value)
+            plt.plot([0, 1], [0, 1], color='navy', linestyle='--')
+            plt.xlim([0.0, 1.0])
+            plt.ylim([0.0, 1.05])
+            plt.xlabel('False Positive Rate')
+            plt.ylabel('True Positive Rate')
+            plt.title('ROC Curve for Segmentation Model')
+            plt.legend(loc="lower right")
+            plt.show()
+
             for metric in metrics.values():
                 metric(output, label)
             val_loss += loss.item()
@@ -128,4 +146,21 @@ with torch.no_grad():
         
         if accelerator.is_local_main_process:
             print(f"val loss: {val_loss}, val dice: {val_dice}, val hausdorff: {val_hausdorff}")
-        
+            # ROC curve
+            # x2 = output.flatten().cpu()
+            # auc_value = compute_roc_auc(x2, label[0].flatten().cpu())
+            # fpr, tpr, thresholds = roc_curve(label[0].flatten().cpu(), x2)
+            # labels = torch.cat(labels).flatten().cpu()
+            # outputs = torch.cat(outputs).flatten().cpu()
+            # auc_value = compute_roc_auc(outputs, labels)
+            # fpr, tpr, thresholds = roc_curve(labels, outputs)
+            # plt.figure()
+            # plt.plot(fpr, tpr, color='darkorange', label='ROC curve (area = %0.2f)' % auc_value)
+            # plt.plot([0, 1], [0, 1], color='navy', linestyle='--')
+            # plt.xlim([0.0, 1.0])
+            # plt.ylim([0.0, 1.05])
+            # plt.xlabel('False Positive Rate')
+            # plt.ylabel('True Positive Rate')
+            # plt.title('ROC Curve for Segmentation Model')
+            # plt.legend(loc="lower right")
+            # plt.show()
