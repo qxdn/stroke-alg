@@ -10,12 +10,12 @@ class Config(object):
         image_size: Tuple[int],
         seed: int = 114514,
         epochs: int = 200,
-        batch_siz: int = 1,
+        batch_size: int = 1,
         warmup: int = 5,
     ) -> None:
         self.seed = seed
         self.epochs = epochs
-        self.batch_size = batch_siz
+        self.batch_size = batch_size
         self.resume_path = resume_path
         self.image_size = image_size
         self.data_path = data_path
@@ -47,7 +47,7 @@ def get_config() -> Config:
         image_size=(args.image_length, args.image_width, args.image_height),
         seed=args.seed,
         epochs=args.epochs,
-        batch_siz=args.batch_size,
+        batch_size=args.batch_size,
         warmup=args.wramup,
     )
 
