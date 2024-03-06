@@ -712,40 +712,40 @@ class CAFormerPolyUnetV2(CAFormerPolyUnet):
             add=add,
         )
         
-        self.skip_encoder1 =  ConvFormerBlock(
+        self.skip_encoder1 =  CAAPFormerBlock(
             spatial_dims=spatial_dims,
             in_channels=dims[3],
             norm_name=norm_name,
             dropout_rate=drop_path_rate,
+            norm_name=norm_name,
+            res_block=res_block,
         )
 
-        self.skip_encoder2 = ConvFormerBlock(
+        self.skip_encoder2 = CAAPFormerBlock(
             spatial_dims=spatial_dims,
             in_channels=dims[2],
             norm_name=norm_name,
             dropout_rate=drop_path_rate,
+            norm_name=norm_name,
+            res_block=res_block,
         )
 
-        self.skip_encoder3 = CAAPFormerBlock(
+        self.skip_encoder3 = ConvFormerBlock(
             spatial_dims=spatial_dims,
             in_channels=dims[1],
             out_channels=dims[1],
-            kernel_size=3,
-            stride=1,
+             dropout_rate=drop_path_rate,
             norm_name=norm_name,
             res_block=res_block,
-            dropout_rate=drop_path_rate,
         )
 
-        self.skip_encoder4 = CAAPFormerBlock(
+        self.skip_encoder4 = ConvFormerBlock(
             spatial_dims=spatial_dims,
             in_channels=dims[0],
             out_channels=dims[0],
-            kernel_size=3,
-            stride=1,
+             dropout_rate=drop_path_rate,
             norm_name=norm_name,
             res_block=res_block,
-            dropout_rate=drop_path_rate,
         )
 
     
