@@ -83,7 +83,7 @@ val_dataloader = dataset.get_val_loader(batch_size=batch_size)
 model = CAFormerPolyUnetV2(
     2,
     depths=(3, 3, 9, 3),
-    token_mixers=("caapformer", "caapformer", "caapformer", "caapformer"),
+    token_mixers=("convformer", "convformer", "caapformer", "caapformer"),
     drop_path_rate=0.5,
 )
 

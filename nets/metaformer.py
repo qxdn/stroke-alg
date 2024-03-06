@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch
 from typing import Tuple, Union, Sequence, Optional
-from layers import Stem, MetaFormerStage,MetaPolypConvFormerBlock,CAAPFormerBlock
+from layers import Stem, MetaFormerStage,MetaPolypConvFormerBlock,CAAPFormerBlock,ConvFormerBlock
 from monai.networks.blocks.unetr_block import (
     UnetrBasicBlock,
     UnetrPrUpBlock,
@@ -712,16 +712,18 @@ class CAFormerPolyUnetV2(CAFormerPolyUnet):
             add=add,
         )
         
-        self.skip_encoder1 = CAAPFormerBlock(
+        self.skip_encoder1 =  ConvFormerBlock(
             spatial_dims=spatial_dims,
             in_channels=dims[3],
             norm_name=norm_name,
+            dropout_rate=drop_path_rate,
         )
 
-        self.skip_encoder2 = CAAPFormerBlock(
+        self.skip_encoder2 = ConvFormerBlock(
             spatial_dims=spatial_dims,
             in_channels=dims[2],
             norm_name=norm_name,
+            dropout_rate=drop_path_rate,
         )
 
         self.skip_encoder3 = CAAPFormerBlock(
@@ -732,6 +734,7 @@ class CAFormerPolyUnetV2(CAFormerPolyUnet):
             stride=1,
             norm_name=norm_name,
             res_block=res_block,
+            dropout_rate=drop_path_rate,
         )
 
         self.skip_encoder4 = CAAPFormerBlock(
@@ -742,6 +745,7 @@ class CAFormerPolyUnetV2(CAFormerPolyUnet):
             stride=1,
             norm_name=norm_name,
             res_block=res_block,
+            dropout_rate=drop_path_rate,
         )
 
     
