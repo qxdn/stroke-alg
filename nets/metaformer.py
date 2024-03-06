@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch
 from typing import Tuple, Union, Sequence, Optional
-from layers import Stem, MetaFormerStage,MetaPolypConvFormerBlock
+from layers import Stem, MetaFormerStage,MetaPolypConvFormerBlock,CAAPFormerBlock
 from monai.networks.blocks.unetr_block import (
     UnetrBasicBlock,
     UnetrPrUpBlock,
@@ -399,6 +399,7 @@ class CAFormerPolyUnet(nn.Module):
         depths=(2, 2, 6, 2),
         dims=(64, 128, 320, 512),
         norm_name: str = "instance",
+        token_mixers=("convformer", "convformer", "transformer", "transformer"),
         act: Union[Tuple, str] = ("RELU", {"inplace": True}),
         drop_path_rate=0.0,
         res_block: bool = True,
@@ -410,6 +411,7 @@ class CAFormerPolyUnet(nn.Module):
             in_channels,
             depths=depths,
             dims=dims,
+            token_mixers=token_mixers,
             drop_path_rate=drop_path_rate,
             spatial_dims=spatial_dims,
         )
@@ -618,3 +620,129 @@ class CAFormerUnetWithoutSkip(nn.Module):
 
         return x
 
+class CAFormerUnetWithUnetDecoder(CAFormerUnet):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        spatial_dims: int = 3,
+        depths=(2, 2, 6, 2),
+        dims=(64, 128, 320, 512),
+        norm_name: str = "instance",
+        act: Union[Tuple, str] = ("RELU", {"inplace": True}),
+        drop_path_rate=0.0,
+        res_block: bool = True,
+        add: bool = False,
+    ) -> None:
+        super(CAFormerUnetWithUnetDecoder, self).__init__(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            spatial_dims=spatial_dims,
+            depths=depths,
+            dims=dims,
+            norm_name=norm_name,
+            act=act,
+            drop_path_rate=drop_path_rate,
+            res_block=res_block,
+            add=add,
+        )
+
+
+        self.decoder1 = SimpleUpSample(
+            spatial_dims=spatial_dims,
+            in_channels=dims[3],
+            out_channels=dims[2],
+            kernel_size=3,
+            upsample_kernel_size=2,
+            norm_name=norm_name,
+        )
+
+        self.decoder2 = SimpleUpSample(
+            spatial_dims=spatial_dims,
+            in_channels=dims[2],
+            out_channels=dims[1],
+            kernel_size=3,
+            upsample_kernel_size=2,
+            norm_name=norm_name,
+        )
+
+        self.decoder3 = SimpleUpSample(
+            spatial_dims=spatial_dims,
+            in_channels=dims[1],
+            out_channels=dims[0],
+            kernel_size=3,
+            upsample_kernel_size=2,
+            norm_name=norm_name,
+        )
+
+        self.decoder4 = SimpleUpSample(
+            spatial_dims=spatial_dims,
+            in_channels=dims[0],
+            out_channels=dims[0] // 4,
+            kernel_size=3,
+            upsample_kernel_size=4,
+            norm_name=norm_name,
+            upsameple_only=True
+        )
+
+class CAFormerPolyUnetV2(CAFormerPolyUnet):
+    def __init__(
+        self,
+        in_channels,
+        spatial_dims: int = 3,
+        depths=(2, 2, 6, 2),
+        dims=(64, 128, 320, 512),
+        norm_name: str = "instance",
+        token_mixers=("convformer", "convformer", "transformer", "transformer"),
+        act: Union[Tuple, str] = ("RELU", {"inplace": True}),
+        drop_path_rate=0.0,
+        res_block: bool = True,
+        add: bool = False,
+    ) -> None:
+        super(CAFormerPolyUnetV2, self).__init__(
+            in_channels,
+            spatial_dims=spatial_dims,
+            depths=depths,
+            dims=dims,
+            norm_name=norm_name,
+            token_mixers=token_mixers,
+            act=act,
+            drop_path_rate=drop_path_rate,
+            res_block=res_block,
+            add=add,
+        )
+        
+        self.skip_encoder1 = CAAPFormerBlock(
+            spatial_dims=spatial_dims,
+            in_channels=dims[3],
+            norm_name=norm_name,
+        )
+
+        self.skip_encoder2 = CAAPFormerBlock(
+            spatial_dims=spatial_dims,
+            in_channels=dims[2],
+            norm_name=norm_name,
+        )
+
+        self.skip_encoder3 = CAAPFormerBlock(
+            spatial_dims=spatial_dims,
+            in_channels=dims[1],
+            out_channels=dims[1],
+            kernel_size=3,
+            stride=1,
+            norm_name=norm_name,
+            res_block=res_block,
+        )
+
+        self.skip_encoder4 = CAAPFormerBlock(
+            spatial_dims=spatial_dims,
+            in_channels=dims[0],
+            out_channels=dims[0],
+            kernel_size=3,
+            stride=1,
+            norm_name=norm_name,
+            res_block=res_block,
+        )
+
+    
+    

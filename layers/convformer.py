@@ -182,6 +182,69 @@ class TransformerBlock(nn.Module):
         return x
 
 
+class CAAPFormerBlock(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        head_dim: int = 32,
+        num_heads=None,
+        norm_name: str = "instance",
+        dropout_rate: float = 0.0,
+        spatial_dims: int = 3,
+        **kwargs,
+    ) -> None:
+        super(CAAPFormerBlock, self).__init__()
+        self.spatial_dims = spatial_dims
+        num_heads = num_heads if num_heads else in_channels // head_dim
+
+        self.norm1 = get_norm_layer(
+            norm_name, spatial_dims=spatial_dims, channels=in_channels
+        )
+        self.dwconv = SepConv(in_channels, spatial_dims=spatial_dims)
+        self.attn =  SABlock(in_channels, num_heads, dropout_rate=dropout_rate)
+        self.dropout1 = get_dropout_layer(
+            ("dropout", {"p": dropout_rate}), dropout_dim=spatial_dims
+        )
+
+        self.norm2 = get_norm_layer(
+            norm_name, spatial_dims=spatial_dims, channels=in_channels
+        )
+        self.mlp = nn.Sequential(
+            Conv[Conv.CONV, spatial_dims](in_channels, 4 * in_channels, kernel_size=1),
+            StarReLU(),
+            get_dropout_layer(
+                ("dropout", {"p": dropout_rate}), dropout_dim=spatial_dims
+            ),
+            Conv[Conv.CONV, spatial_dims](4 * in_channels, in_channels, kernel_size=1),
+            get_dropout_layer(
+                ("dropout", {"p": dropout_rate}), dropout_dim=spatial_dims
+            ),
+        )
+        self.dropout2 = get_dropout_layer(
+            ("dropout", {"p": dropout_rate}), dropout_dim=spatial_dims
+        )
+
+    def forward(self, x):
+        road = self.norm1(x)
+        conv = self.dwconv(road)
+         # atten
+        if self.spatial_dims == 3:
+            B, C, H, W, D = road.shape
+            attn_in = einops.rearrange(road, "b c h w d -> b (h w d) c")
+        else:
+            B, C, H, W = road.shape
+            attn_in = einops.rearrange(road, "b c h w -> b (h w) c")
+        attn_out = self.attn(attn_in)
+        if self.spatial_dims == 3:
+            attn_out = einops.rearrange(attn_out, "b (h w d) c -> b c h w d", h=H, w=W, d=D)
+        else:
+            attn_out = einops.rearrange(attn_out, "b (h w) c -> b c h w", h=H, w=W)
+        token_out = conv + attn_out
+        token_out = self.dropout1(token_out)
+        x = x + token_out
+        x = x + self.dropout2(self.mlp(self.norm2(x)))
+        return x
+
 class MetaFormerStage(nn.Module):
     def __init__(
         self,
@@ -198,12 +261,15 @@ class MetaFormerStage(nn.Module):
         assert token_mixer_name in [
             "convformer",
             "transformer",
+            "caapformer"
         ], "token mixer must be convformer or transformer"
 
         if token_mixer_name == "convformer":
             token_mixer = ConvFormerBlock
-        else:
+        elif token_mixer_name == "transformer":
             token_mixer = TransformerBlock
+        elif token_mixer_name == "caapformer":
+            token_mixer = CAAPFormerBlock
 
         self.downsample = (
             nn.Identity()
