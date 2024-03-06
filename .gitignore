@@ -9,3 +9,7 @@ __pycache__
 
 test.py
 testmodel.py
+
+/temp
+*.png
+*.nii.gz
