@@ -1,7 +1,13 @@
 import torch.nn as nn
 import torch
 from typing import Tuple, Union, Sequence, Optional
-from layers import Stem, MetaFormerStage,MetaPolypConvFormerBlock,CAAPFormerBlock,ConvFormerBlock
+from layers import (
+    Stem,
+    MetaFormerStage,
+    MetaPolypConvFormerBlock,
+    CAAPFormerBlock,
+    ConvFormerBlock,
+)
 from monai.networks.blocks.unetr_block import (
     UnetrBasicBlock,
     UnetrPrUpBlock,
@@ -260,7 +266,7 @@ class SimpleUpSample(nn.Module):
             "leakyrelu",
             {"inplace": True, "negative_slope": 0.01},
         ),
-        upsameple_only: bool = False
+        upsameple_only: bool = False,
     ) -> None:
         super(SimpleUpSample, self).__init__()
 
@@ -293,7 +299,7 @@ class SimpleUpSample(nn.Module):
             ),
         )
 
-    def forward(self, inp, skip = None):
+    def forward(self, inp, skip=None):
         out = self.transp_conv(inp)
         if skip is not None:
             out = torch.cat((out, skip), dim=1)
@@ -359,7 +365,7 @@ class SimpleCAUnet(nn.Module):
             kernel_size=3,
             upsample_kernel_size=4,
             norm_name=norm_name,
-            upsameple_only=True
+            upsameple_only=True,
         )
 
         self.final_conv = get_conv_layer(
@@ -390,6 +396,7 @@ class SimpleCAUnet(nn.Module):
         x = self.final_conv(x)
 
         return x
+
 
 class CAFormerPolyUnet(nn.Module):
     def __init__(
@@ -447,7 +454,6 @@ class CAFormerPolyUnet(nn.Module):
             norm_name=norm_name,
             res_block=res_block,
         )
-
 
         self.decoder1 = UpSample(
             spatial_dims=spatial_dims,
@@ -604,10 +610,10 @@ class CAFormerUnetWithoutSkip(nn.Module):
     def forward(self, x):
         x, hidden_states = self.caformer(x)
 
-        y = hidden_states[3] # /32
+        y = hidden_states[3]  # /32
         x = self.decoder1(x, y)  # /16
 
-        y = hidden_states[2] # /16
+        y = hidden_states[2]  # /16
         x = self.decoder2(x, y)  # /8
 
         y = hidden_states[1]  # /8
@@ -619,6 +625,7 @@ class CAFormerUnetWithoutSkip(nn.Module):
         x = self.final_conv(x)
 
         return x
+
 
 class CAFormerUnetWithUnetDecoder(CAFormerUnet):
     def __init__(
@@ -646,7 +653,6 @@ class CAFormerUnetWithUnetDecoder(CAFormerUnet):
             res_block=res_block,
             add=add,
         )
-
 
         self.decoder1 = SimpleUpSample(
             spatial_dims=spatial_dims,
@@ -682,8 +688,9 @@ class CAFormerUnetWithUnetDecoder(CAFormerUnet):
             kernel_size=3,
             upsample_kernel_size=4,
             norm_name=norm_name,
-            upsameple_only=True
+            upsameple_only=True,
         )
+
 
 class CAFormerPolyUnetV2(CAFormerPolyUnet):
     def __init__(
@@ -711,13 +718,12 @@ class CAFormerPolyUnetV2(CAFormerPolyUnet):
             res_block=res_block,
             add=add,
         )
-        
-        self.skip_encoder1 =  CAAPFormerBlock(
+
+        self.skip_encoder1 = CAAPFormerBlock(
             spatial_dims=spatial_dims,
             in_channels=dims[3],
             norm_name=norm_name,
             dropout_rate=drop_path_rate,
-            norm_name=norm_name,
             res_block=res_block,
         )
 
@@ -726,7 +732,6 @@ class CAFormerPolyUnetV2(CAFormerPolyUnet):
             in_channels=dims[2],
             norm_name=norm_name,
             dropout_rate=drop_path_rate,
-            norm_name=norm_name,
             res_block=res_block,
         )
 
@@ -734,7 +739,7 @@ class CAFormerPolyUnetV2(CAFormerPolyUnet):
             spatial_dims=spatial_dims,
             in_channels=dims[1],
             out_channels=dims[1],
-             dropout_rate=drop_path_rate,
+            dropout_rate=drop_path_rate,
             norm_name=norm_name,
             res_block=res_block,
         )
@@ -743,10 +748,7 @@ class CAFormerPolyUnetV2(CAFormerPolyUnet):
             spatial_dims=spatial_dims,
             in_channels=dims[0],
             out_channels=dims[0],
-             dropout_rate=drop_path_rate,
+            dropout_rate=drop_path_rate,
             norm_name=norm_name,
             res_block=res_block,
         )
-
-    
-    
