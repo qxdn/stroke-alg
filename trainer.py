@@ -18,7 +18,16 @@ from tensorboardX import SummaryWriter
 from utils import set_seed, load_weight, get_config
 from monai.optimizers.lr_scheduler import WarmupCosineSchedule
 from torch.optim.lr_scheduler import StepLR, ExponentialLR
-from nets import UNETRET, CAFormerUnet, SimpleCAUnet, CAFormerPolyUnet, DuckNet,CAFormerUnetWithoutSkip,CAFormerUnetWithUnetDecoder
+from nets import (
+    UNETRET,
+    CAFormerUnet,
+    SimpleCAUnet,
+    CAFormerPolyUnet,
+    DuckNet,
+    CAFormerUnetWithoutSkip,
+    CAFormerUnetWithUnetDecoder,
+    CAFormerPolyUnetV2,
+)
 
 join = os.path.join
 # 加速
@@ -70,7 +79,13 @@ val_dataloader = dataset.get_val_loader(batch_size=batch_size)
 # model = CAFormerPolyUnet(2, drop_path_rate=0.5)
 # model = DuckNet(2, 2)
 # model = SimpleCAUnet(2, 2, depths=(3, 3, 6, 9), drop_path_rate=0.5)
-model = CAFormerUnetWithoutSkip(2,2,depths=(3,3,9,3),drop_path_rate=0.5,add=False)
+# model = CAFormerUnetWithoutSkip(2,2,depths=(3,3,9,3),drop_path_rate=0.5,add=False)
+model = CAFormerPolyUnetV2(
+    2,
+    depths=(3, 3, 9, 3),
+    token_mixers=("caapformer", "caapformer", "caapformer", "caapformer"),
+    drop_path_rate=0.5,
+)
 
 if config.resume_path != None:
     model = load_weight(model, config.resume_path)

@@ -72,7 +72,7 @@ class ISLES2017(BaseDataset):
                     keys=[image_key, label_key],
                     label_key=label_key,
                     spatial_size=image_size,
-                    num_samples=2,
+                    num_samples=4,
                 ),
                 NormalizeIntensityd(keys=[image_key]),
                 RandRotated(
