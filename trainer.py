@@ -70,14 +70,14 @@ val_dataloader = dataset.get_val_loader(batch_size=batch_size)
 
 
 # model
-model = UNETR(2, 2, image_sizes)
+# model = UNETR(2, 2, image_sizes)
 # model = UNETRET(2, 2, image_sizes)
 # from testmodel import NN
 # model = NN(2, 2)
 # model = CAFormerUnet(2,2,3,depths=(3,3,9,3),drop_path_rate=0.5,add=False)
 # model = SimpleCAUnet(2, drop_path_rate=0.5)
 # model = CAFormerPolyUnet(2, drop_path_rate=0.5)
-# model = DuckNet(2, 2)
+model = DuckNet(2, 2)
 # model = SimpleCAUnet(2, 2, depths=(3, 3, 6, 9), drop_path_rate=0.5)
 # model = CAFormerUnetWithoutSkip(2,2,depths=(3,3,9,3),drop_path_rate=0.5,add=False)
 #model = CAFormerPolyUnetV2(
