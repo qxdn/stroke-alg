@@ -401,7 +401,8 @@ class SimpleCAUnet(nn.Module):
 class CAFormerPolyUnet(nn.Module):
     def __init__(
         self,
-        in_channels,
+        in_channels: int,
+        out_channels: int,
         spatial_dims: int = 3,
         depths=(2, 2, 6, 2),
         dims=(64, 128, 320, 512),
@@ -502,7 +503,7 @@ class CAFormerPolyUnet(nn.Module):
         self.final_conv = get_conv_layer(
             spatial_dims,
             dims[0] // 4,
-            in_channels,
+            out_channels,
             kernel_size=1,
             stride=1,
             norm=norm_name,
@@ -695,7 +696,8 @@ class CAFormerUnetWithUnetDecoder(CAFormerUnet):
 class CAFormerPolyUnetV2(CAFormerPolyUnet):
     def __init__(
         self,
-        in_channels,
+        in_channels: int,
+        out_channels: int,
         spatial_dims: int = 3,
         depths=(2, 2, 6, 2),
         dims=(64, 128, 320, 512),
@@ -708,6 +710,7 @@ class CAFormerPolyUnetV2(CAFormerPolyUnet):
     ) -> None:
         super(CAFormerPolyUnetV2, self).__init__(
             in_channels,
+            out_channels,
             spatial_dims=spatial_dims,
             depths=depths,
             dims=dims,

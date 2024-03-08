@@ -73,19 +73,20 @@ val_dataloader = dataset.get_val_loader(batch_size=batch_size)
 # model = UNETR(2, 2, image_sizes)
 # model = UNETRET(2, 2, image_sizes)
 # from testmodel import NN
-# model = NN(2, 2)
+# model = torch.nn.Conv3d(2,1,1,1)
 # model = CAFormerUnet(2,2,3,depths=(3,3,9,3),drop_path_rate=0.5,add=False)
 # model = SimpleCAUnet(2, drop_path_rate=0.5)
 # model = CAFormerPolyUnet(2, drop_path_rate=0.5)
-model = DuckNet(2, 2)
+# model = DuckNet(2, 2)
 # model = SimpleCAUnet(2, 2, depths=(3, 3, 6, 9), drop_path_rate=0.5)
 # model = CAFormerUnetWithoutSkip(2,2,depths=(3,3,9,3),drop_path_rate=0.5,add=False)
-#model = CAFormerPolyUnetV2(
-#    2,
-#    depths=(3, 3, 9, 3),
-#    token_mixers=("convformer", "convformer", "caapformer", "caapformer"),
-#    drop_path_rate=0.5,
-#)
+model = CAFormerPolyUnetV2(
+    2,
+    1,
+    depths=(3, 3, 9, 3),
+    token_mixers=("convformer", "convformer", "caapformer", "caapformer"),
+    drop_path_rate=0.5,
+)
 
 if config.resume_path != None:
     model = load_weight(model, config.resume_path)
