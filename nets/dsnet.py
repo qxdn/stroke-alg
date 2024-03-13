@@ -379,7 +379,7 @@ class DSCResMultiUpNet(nn.Module):
             out_channels=filters * 8,
             act_name=(
                 "leakyrelu",
-                {"inplace": True, "negative_slope": 0.01},
+                {"negative_slope": 0.01},
             ),
             norm_name="instance",
             adn_ordering="NDA",
