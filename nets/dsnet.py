@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-from layers import DSConv3d, DSConv3dBlock
+from layers import DSConv3d, DSConv3dBlock, DuckBlock
 from monai.networks.layers.factories import Conv
 from monai.networks.layers.utils import get_norm_layer, get_act_layer, get_dropout_layer
 from monai.networks.blocks.convolutions import Convolution
@@ -374,6 +374,18 @@ class DSCResMultiUpNet(nn.Module):
             ]
         )
 
+        self.duck_block = DuckBlock(
+            in_channels=filters * 8,
+            out_channels=filters * 8,
+            act_name=(
+                "leakyrelu",
+                {"inplace": True, "negative_slope": 0.01},
+            ),
+            norm_name="instance",
+            adn_ordering="NDA",
+            spatial_dims=3,
+        )
+
         self.up1 = Upsampling(
             in_channels=filters * 8,
             out_channels=filters * 4,
@@ -467,6 +479,8 @@ class DSCResMultiUpNet(nn.Module):
 
         x = self.down3(x3)
         x4 = self.dsconv4(x)
+
+        x4 = self.duck_block(x4)
 
         x = self.up1(x4)
         # x5 = self.dsconv5(torch.cat([x, x3], dim=1))
