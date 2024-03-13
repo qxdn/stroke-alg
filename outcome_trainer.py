@@ -16,7 +16,7 @@ from monai.optimizers.lr_scheduler import WarmupCosineSchedule
 from monai.losses.dice import DiceFocalLoss
 from monai.metrics import DiceMetric, HausdorffDistanceMetric
 from monai.inferers import sliding_window_inference
-from nets import DSCNet, DSSegResNetWrapper, EMA
+from nets import DSCNet, DSSegResNetWrapper, EMA, DSCResMultiUpNet
 
 
 join = os.path.join
@@ -64,7 +64,8 @@ val_dataloader = datasets.get_val_loader(batch_size=batch_size)
 #    dropout_prob=0.2,
 # )
 # model = UNETR(in_channels=6, out_channels=2, img_size=image_sizes, dropout_rate=0.5)
-model = DSCNet(6, 2)
+# model = DSCNet(6, 2)
+model = DSCResMultiUpNet(6, 2)
 # model = DSSegResNetWrapper(
 #    lesion_in_channels=4, blood_in_channels=3, out_channels=2
 # )
@@ -73,6 +74,7 @@ if config.resume_path != None:
     model = load_weight(model, config.resume_path)
     print("load weight from {}".format(config.resume_path))
 
+"""
 ema_model = EMA(
     model,
     beta=0.9999,
@@ -81,6 +83,7 @@ ema_model = EMA(
     update_after_step=10,
     allow_different_devices=True,
 )
+"""
 
 accelerator.print(model)
 
@@ -109,9 +112,13 @@ model.to(device)
     scheduler,
     train_dataloader,
     val_dataloader,
-    ema_model,
+    # ema_model,
 ) = accelerator.prepare(
-    model, optimizer, scheduler, train_dataloader, val_dataloader, ema_model
+    model,
+    optimizer,
+    scheduler,
+    train_dataloader,
+    val_dataloader,  # ema_model
 )
 # loss func
 loss_func = DiceFocalLoss(to_onehot_y=True, softmax=True)
@@ -150,7 +157,7 @@ for epoch in range(epochs):
                 metric_result[name] = metric.aggregate().item()
             tepoch.set_postfix(loss=train_epoch_loss / (step + 1), **metric_result)
 
-            ema_model.update()
+            # ema_model.update()
 
         scheduler.step()
         train_epoch_loss /= step + 1
@@ -201,7 +208,8 @@ for epoch in range(epochs):
                         image,
                         image_sizes,
                         sw_batch_size=batch_size,
-                        predictor=ema_model,
+                        # predictor=ema_model,
+                        predictor=model,
                     )
 
                     loss = loss_func(output, label)
@@ -246,22 +254,22 @@ for epoch in range(epochs):
     # save model
     if accelerator.is_local_main_process:
         unwrap_model = accelerator.unwrap_model(model)
-        unwrap_ema = accelerator.unwrap_model(ema_model)
+        # unwrap_ema = accelerator.unwrap_model(ema_model)
         # save epoch model
         accelerator.save(
             unwrap_model.state_dict(), join(model_save_path, "latest_model.pth")
         )
-        accelerator.save(
-            unwrap_ema.model.state_dict(), join(model_save_path, "ema_latest.pth")
-        )
+        # accelerator.save(
+        #    unwrap_ema.model.state_dict(), join(model_save_path, "ema_latest.pth")
+        # )
         # save best model
         if best_dice < val_dice:
             best_dice = val_dice
             accelerator.save(
                 unwrap_model.state_dict(), join(model_save_path, "best_model.pth")
             )
-            accelerator.save(
-                unwrap_ema.model.state_dict(), join(model_save_path, "ema_best.pth")
-            )
+            # accelerator.save(
+            #    unwrap_ema.model.state_dict(), join(model_save_path, "ema_best.pth")
+            # )
 
 accelerator.end_training()

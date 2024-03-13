@@ -1,6 +1,9 @@
 import torch.nn as nn
 import torch
-from layers import DSConv3d
+from layers import DSConv3d, DSConv3dBlock
+from monai.networks.layers.factories import Conv
+from monai.networks.layers.utils import get_norm_layer, get_act_layer, get_dropout_layer
+from monai.networks.blocks.convolutions import Convolution
 
 
 class EncoderConv(nn.Module):
@@ -60,7 +63,9 @@ class DSConv(nn.Module):
         )
 
         self.out_conv = (
-            EncoderConv(4*out_ch, out_ch) if encoder else DecoderConv(4*out_ch, out_ch)
+            EncoderConv(4 * out_ch, out_ch)
+            if encoder
+            else DecoderConv(4 * out_ch, out_ch)
         )
 
     def forward(self, inputs):
@@ -190,5 +195,296 @@ class DSCNet(nn.Module):
         out = self.out_conv(x7)
         # out = self.softmax(out)
         # out = self.up(out)
+
+        return out
+
+
+class Downsampling(nn.Module):
+    """
+    Downsampling implemented by a layer of convolution.
+    """
+
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size,
+        stride: int = 1,
+        padding: int = 0,
+        norm_name="instance",
+        spatial_dims: int = 3,
+    ):
+        super().__init__()
+        self.norm = get_norm_layer(
+            norm_name, channels=in_channels, spatial_dims=spatial_dims
+        )
+        self.conv = Conv[Conv.CONV, spatial_dims](
+            in_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+        )
+
+    def forward(self, x):
+        x = self.norm(x)
+        x = self.conv(x)
+        return x
+
+
+class Upsampling(nn.Module):
+
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_size=3,
+        stride: int = 1,
+        scale_factor: int = 2,
+        padding: int = 0,
+        norm_name="instance",
+        spatial_dims: int = 3,
+    ):
+        super().__init__()
+        self.up = nn.Upsample(
+            scale_factor=scale_factor, mode="trilinear", align_corners=True
+        )
+        self.norm = get_norm_layer(
+            norm_name, channels=in_channels, spatial_dims=spatial_dims
+        )
+        self.conv = Conv[Conv.CONV, spatial_dims](
+            in_channels,
+            out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+        )
+
+    def forward(self, x):
+        x = self.up(x)
+        x = self.norm(x)
+        x = self.conv(x)
+        return x
+
+
+class DSCResMultiUpNet(nn.Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        filters: int = 16,
+        kernel_size: int = 3,
+        extend_scope: int = 1,
+        if_offset: bool = True,
+        res_block: bool = True,
+        repeat_time: int = 2,
+        dropout_rate: float = 0.5,
+    ):
+        super(DSCResMultiUpNet, self).__init__()
+
+        # Unet
+        self.conv1 = Convolution(
+            spatial_dims=3,
+            in_channels=in_channels,
+            out_channels=filters,
+            kernel_size=kernel_size,
+            strides=1,
+        )
+        self.dsconv1 = nn.Sequential(
+            *[
+                DSConv3dBlock(
+                    filters,
+                    filters,
+                    kernel_size,
+                    extend_scope,
+                    if_offset=if_offset,
+                    res_block=res_block,
+                    dropout_rate=dropout_rate,
+                )
+                for _ in range(repeat_time)
+            ]
+        )
+
+        self.down1 = Downsampling(
+            in_channels=filters,
+            out_channels=filters * 2,
+            kernel_size=3,
+            stride=2,
+            padding=1,
+        )
+
+        self.dsconv2 = nn.Sequential(
+            *[
+                DSConv3dBlock(
+                    filters * 2,
+                    filters * 2,
+                    kernel_size,
+                    extend_scope,
+                    if_offset=if_offset,
+                    res_block=res_block,
+                    dropout_rate=dropout_rate,
+                )
+                for _ in range(repeat_time)
+            ]
+        )
+
+        self.down2 = Downsampling(
+            in_channels=filters * 2,
+            out_channels=filters * 4,
+            kernel_size=3,
+            stride=2,
+            padding=1,
+        )
+
+        self.dsconv3 = nn.Sequential(
+            *[
+                DSConv3dBlock(
+                    filters * 4,
+                    filters * 4,
+                    kernel_size,
+                    extend_scope,
+                    if_offset=if_offset,
+                    res_block=res_block,
+                    dropout_rate=dropout_rate,
+                )
+                for _ in range(repeat_time)
+            ]
+        )
+
+        self.down3 = Downsampling(
+            in_channels=filters * 4,
+            out_channels=filters * 8,
+            kernel_size=3,
+            stride=2,
+            padding=1,
+        )
+
+        self.dsconv4 = nn.Sequential(
+            *[
+                DSConv3dBlock(
+                    filters * 8,
+                    filters * 8,
+                    kernel_size,
+                    extend_scope,
+                    if_offset=if_offset,
+                    res_block=res_block,
+                    dropout_rate=dropout_rate,
+                )
+                for _ in range(repeat_time)
+            ]
+        )
+
+        self.up1 = Upsampling(
+            in_channels=filters * 8,
+            out_channels=filters * 4,
+            kernel_size=3,
+            stride=1,
+            scale_factor=2,
+            padding=1,
+        )
+
+        self.dsconv5 = nn.Sequential(
+            *[
+                DSConv3dBlock(
+                    filters * 4,
+                    filters * 4,
+                    kernel_size,
+                    extend_scope,
+                    if_offset=if_offset,
+                    res_block=res_block,
+                    dropout_rate=dropout_rate,
+                )
+                for _ in range(repeat_time)
+            ]
+        )
+
+        self.up2 = Upsampling(
+            in_channels=filters * 4,
+            out_channels=filters * 2,
+            kernel_size=3,
+            stride=1,
+            scale_factor=2,
+            padding=1,
+        )
+
+        self.dsconv6 = nn.Sequential(
+            *[
+                DSConv3dBlock(
+                    filters * 2,
+                    filters * 2,
+                    kernel_size,
+                    extend_scope,
+                    if_offset=if_offset,
+                    res_block=res_block,
+                    dropout_rate=dropout_rate,
+                )
+                for _ in range(repeat_time)
+            ]
+        )
+
+        self.up3 =  Upsampling(
+            in_channels=filters * 2,
+            out_channels=filters * 1,
+            kernel_size=3,
+            stride=1,
+            scale_factor=2,
+            padding=1,
+        )
+
+        self.dsconv7 = nn.Sequential(
+            *[
+                DSConv3dBlock(
+                    filters * 1,
+                    filters,
+                    kernel_size,
+                    extend_scope,
+                    if_offset=if_offset,
+                    res_block=res_block,
+                    dropout_rate=dropout_rate,
+                )
+                for _ in range(repeat_time)
+            ]
+        )
+
+        self.out_conv = Convolution(
+            spatial_dims=3,
+            in_channels=filters,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            strides=1,
+        )
+
+    def forward(self, x):
+        x1 = self.conv1(x)
+        x1 = self.dsconv1(x1)
+        print(x1.shape)
+
+        x = self.down1(x1)
+        print(x.shape)
+        x2 = self.dsconv2(x)
+
+        x = self.down2(x2)
+        x3 = self.dsconv3(x)
+        print("x3:", x3.shape)
+
+        x = self.down3(x3)
+        x4 = self.dsconv4(x)
+
+        x = self.up1(x4)
+        print(x.shape)
+        # x5 = self.dsconv5(torch.cat([x, x3], dim=1))
+        x5 = x + x3
+
+        print("x5:", x5.shape)
+
+        x = self.up2(x5)
+        # x6 = self.dsconv6(torch.cat([x, x2], dim=1))
+        x6 = x + x2
+
+        x = self.up3(x6)
+        # x7 = self.dsconv7(torch.cat([x, x1], dim=1))
+        x7 = x + x1
+
+        out = self.out_conv(x7)
 
         return out

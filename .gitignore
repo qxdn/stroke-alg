@@ -11,5 +11,8 @@ test.py
 testmodel.py
 
 /temp
+/temp2
 *.png
 *.nii.gz
+
+/autodl
