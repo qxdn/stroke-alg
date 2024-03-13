@@ -422,7 +422,7 @@ class DSCResMultiUpNet(nn.Module):
             ]
         )
 
-        self.up3 =  Upsampling(
+        self.up3 = Upsampling(
             in_channels=filters * 2,
             out_channels=filters * 1,
             kernel_size=3,
@@ -457,25 +457,20 @@ class DSCResMultiUpNet(nn.Module):
     def forward(self, x):
         x1 = self.conv1(x)
         x1 = self.dsconv1(x1)
-        print(x1.shape)
 
         x = self.down1(x1)
-        print(x.shape)
+
         x2 = self.dsconv2(x)
 
         x = self.down2(x2)
         x3 = self.dsconv3(x)
-        print("x3:", x3.shape)
 
         x = self.down3(x3)
         x4 = self.dsconv4(x)
 
         x = self.up1(x4)
-        print(x.shape)
         # x5 = self.dsconv5(torch.cat([x, x3], dim=1))
         x5 = x + x3
-
-        print("x5:", x5.shape)
 
         x = self.up2(x5)
         # x6 = self.dsconv6(torch.cat([x, x2], dim=1))
